@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My dashboard — MAXSHOW</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'}}}}</script>
+    <link rel="stylesheet" href="theme.css?v=3">
+    <script src="theme.js?v=3"></script>
+    <script src="common.js?v=4"></script>
+</head>
+<body class="min-h-screen bg-cream text-ink antialiased dark:bg-[#101820] dark:text-white">
+    <header class="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
+        <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <a href="index.html" class="flex items-center gap-2.5">
+                <span class="grid h-10 w-10 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-sm shadow-coral/30">M</span>
+                <span class="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+            </a>
+            <div class="flex items-center gap-2.5 sm:gap-4 pr-10 sm:pr-0">
+                <a href="index.html#discover" class="text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-coral transition">Browse events</a>
+                <a href="settings.html" class="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-coral transition">
+                    <span>⚙</span> Settings
+                </a>
+                <button id="logout-button" class="rounded-full border border-stone-300 bg-white px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold hover:border-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-white" type="button">Log out</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12 lg:px-8">
+        <section class="rounded-2xl sm:rounded-[2rem] bg-ink p-6 text-white sm:p-10 shadow-sm dark:bg-[#0b1118] border border-transparent dark:border-slate-800">
+            <p class="text-xs sm:text-sm font-bold uppercase tracking-[.16em] text-[#F6BC58]">Your MAXSHOW account</p>
+            <div class="mt-4 sm:mt-5 flex flex-col justify-between gap-4 sm:gap-6 sm:flex-row sm:items-end">
+                <div>
+                    <h1 id="welcome-name" class="text-3xl font-black tracking-tight sm:text-5xl">Welcome back</h1>
+                    <p class="mt-2 text-xs sm:text-sm text-white/70 font-semibold">Manage your profile, account preferences, and booked experiences.</p>
+                </div>
+                <a href="index.html#discover" class="rounded-2xl bg-coral px-5 py-3 text-center text-xs sm:text-sm font-bold text-white shadow-md shadow-coral/20 transition hover:bg-[#df503c]">Find an experience</a>
+            </div>
+        </section>
+
+        <section class="mt-8 sm:mt-10 grid gap-6 sm:gap-8 lg:grid-cols-[.75fr_1.25fr]">
+            <aside class="rounded-2xl sm:rounded-[2rem] bg-white p-5 sm:p-7 shadow-sm dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 h-fit">
+                <div class="flex items-center justify-between">
+                    <p class="text-xs sm:text-sm font-bold uppercase tracking-[.16em] text-coral">Profile</p>
+                </div>
+                
+                <div class="mt-5 sm:mt-6 flex items-center gap-4">
+                    <div class="grid h-14 w-14 sm:h-16 sm:w-16 shrink-0 place-items-center rounded-2xl bg-[#F9D9B7] text-xl sm:text-2xl font-black text-ink shadow-sm" id="profile-initial">M</div>
+                    <div class="min-w-0">
+                        <h2 id="profile-name" class="font-black text-ink dark:text-white text-base sm:text-lg truncate">Full Name</h2>
+                        <span id="profile-username" class="inline-block mt-0.5 rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">@username</span>
+                    </div>
+                </div>
+
+                <dl class="mt-6 space-y-4 border-t border-stone-100 pt-5 dark:border-slate-800">
+                    <div>
+                        <dt class="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Email Address</dt>
+                        <dd id="profile-email" class="mt-1 break-all font-bold text-ink dark:text-white text-xs sm:text-sm"></dd>
+                    </div>
+                    <div>
+                        <dt class="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Phone Number</dt>
+                        <dd id="profile-phone" class="mt-1 font-bold text-ink dark:text-white text-xs sm:text-sm"></dd>
+                    </div>
+                </dl>
+
+                <!-- Profile Actions -->
+                <div class="mt-6 border-t border-stone-100 pt-5 dark:border-slate-800">
+                    <button id="open-edit-profile-btn" type="button" class="flex w-full items-center justify-center gap-2 rounded-2xl bg-coral px-4 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-coral/20 hover:bg-[#df503c] transition">
+                        <span>✏</span> Edit Profile
+                    </button>
+                </div>
+            </aside>
+
+            <section>
+                <div class="flex items-end justify-between">
+                    <div>
+                        <p class="text-xs sm:text-sm font-bold uppercase tracking-[.16em] text-coral">Your plans</p>
+                        <h2 class="mt-1 sm:mt-2 text-2xl sm:text-3xl font-black text-ink dark:text-white">Booked tickets</h2>
+                    </div>
+                    <span id="booking-count" class="rounded-full bg-[#D2E8E3] px-3 py-1 text-xs sm:text-sm font-bold text-ink">0 tickets</span>
+                </div>
+                <div id="booking-list" class="mt-5 sm:mt-6 space-y-3 sm:space-y-4"></div>
+                <div id="empty-bookings" class="mt-5 sm:mt-6 hidden rounded-2xl sm:rounded-[2rem] border border-dashed border-stone-300 bg-white p-8 sm:p-10 text-center dark:bg-[#1c2733] dark:border-slate-700">
+                    <p class="text-3xl">✦</p>
+                    <h3 class="mt-3 text-lg sm:text-xl font-black text-ink dark:text-white">No booked tickets yet</h3>
+                    <p class="mt-1.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Your next good plan is waiting to be found.</p>
+                    <a href="index.html#discover" class="mt-5 inline-block rounded-2xl bg-coral px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-coral/20">Explore events</a>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <!-- Edit Profile Modal -->
+    <div id="edit-profile-modal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-ink/75 backdrop-blur-sm p-4 sm:p-6 flex items-center justify-center overscroll-contain">
+        <div class="relative w-full max-w-lg rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl dark:bg-[#1a2430] border border-stone-200 dark:border-slate-700 overscroll-contain">
+            <div class="flex items-center justify-between border-b border-stone-100 pb-4 dark:border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-coral text-xl font-bold dark:bg-coral/20">
+                        ✏
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black text-ink dark:text-white">Edit Profile</h3>
+                        <p class="text-xs text-slate-400 font-semibold">Update your account details</p>
+                    </div>
+                </div>
+                <button id="close-edit-modal-btn" class="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-slate-400 hover:bg-stone-200 hover:text-ink dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white transition" type="button">✕</button>
+            </div>
+
+            <form id="edit-profile-form" class="mt-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1" for="edit-fullname">Full Name *</label>
+                    <input id="edit-fullname" type="text" required class="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm font-bold text-ink outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="Your full name">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1" for="edit-username">Username *</label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-400 text-sm">@</span>
+                        <input id="edit-username" type="text" required pattern="[a-zA-Z0-9_]{3,30}" class="w-full rounded-2xl border border-stone-300 bg-stone-50 pl-8 pr-4 py-3 text-sm font-mono font-bold text-ink outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="username">
+                    </div>
+                    <p class="mt-1 text-[11px] text-slate-400 font-medium">Letters, numbers, and underscores (_) only (3-30 chars).</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1" for="edit-email">Email Address *</label>
+                    <input id="edit-email" type="email" required class="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm font-bold text-ink outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="name@example.com">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1" for="edit-phone">Phone Number *</label>
+                    <input id="edit-phone" type="tel" required maxlength="10" pattern="[0-9]{10}" class="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm font-bold text-ink outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="10-digit mobile number">
+                    <p class="mt-1 text-[11px] text-slate-400 font-medium">10 digits, numbers only.</p>
+                </div>
+
+                <div id="edit-error-msg" class="hidden rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600 dark:bg-red-950/50 dark:text-red-300"></div>
+
+                <div class="mt-6 flex gap-3 pt-2">
+                    <button id="cancel-edit-modal-btn" type="button" class="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-xs sm:text-sm font-bold text-slate-700 hover:bg-stone-50 dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 dark:hover:bg-slate-800 transition">
+                        Cancel
+                    </button>
+                    <button id="save-profile-btn" type="submit" class="w-full rounded-2xl bg-coral px-4 py-3 text-xs sm:text-sm font-bold text-white shadow-md shadow-coral/25 hover:bg-[#df503c] transition">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Booking Details Modal -->
+    <div id="booking-modal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-ink/70 backdrop-blur-sm p-4 sm:p-6 flex items-center justify-center overscroll-contain">
+        <div class="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-[2rem] bg-white shadow-2xl transition-all dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 overflow-hidden overscroll-contain">
+            <!-- Modal Header (Always Visible) -->
+            <div class="flex items-center justify-between border-b border-stone-100 px-6 py-4 sm:px-7 sm:py-5 dark:border-slate-700/80 shrink-0 bg-white dark:bg-[#1c2733] z-10">
+                <div class="flex items-center gap-2.5">
+                    <span class="grid h-8 w-8 place-items-center rounded-xl bg-coral/10 text-coral dark:bg-coral/20">🎟️</span>
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-wider text-coral">Ticket &amp; Reservation</p>
+                        <h2 class="text-xl font-black text-ink dark:text-white">Booking Details</h2>
+                    </div>
+                </div>
+                <button id="close-booking-modal" class="rounded-full p-2 text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-white transition" type="button" aria-label="Close modal">✕</button>
+            </div>
+
+            <!-- Scrollable Modal Content Body -->
+            <div id="modal-booking-content" class="flex-1 overflow-y-auto px-6 py-5 sm:px-7 sm:py-6 space-y-5 overscroll-contain">
+                <!-- Dynamically populated -->
+            </div>
+
+            <!-- Modal Footer (Always Visible) -->
+            <div class="flex items-center justify-between gap-3 border-t border-stone-100 px-6 py-4 sm:px-7 dark:border-slate-700/80 bg-stone-50/90 dark:bg-[#101820]/90 shrink-0">
+                <a id="modal-event-link" href="#" class="inline-flex items-center gap-1.5 text-xs font-bold text-coral hover:underline">
+                    View Event Details →
+                </a>
+                <button id="modal-close-btn" type="button" class="rounded-2xl border border-stone-300 bg-stone-50 px-5 py-2.5 text-xs font-bold text-slate-700 hover:bg-stone-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition">
+                    Close Details
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Component -->
+    <div id="toast" class="fixed bottom-5 left-1/2 z-[60] hidden -translate-x-1/2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-soft" role="status"></div>
+
+    <!-- Themed Custom Confirmation Modal -->
+    <div id="maxshow-confirm-modal" class="fixed inset-0 z-[100] hidden bg-ink/75 backdrop-blur-sm p-4 flex items-center justify-center">
+        <div class="relative w-full max-w-md rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 text-center animate-in fade-in zoom-in-95 duration-150">
+            <div id="confirm-modal-icon-container" class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-coral/10 text-3xl text-coral dark:bg-coral/20 shadow-sm">
+                <span id="confirm-modal-icon">🚪</span>
+            </div>
+            <h3 id="confirm-modal-title" class="mt-5 text-xl sm:text-2xl font-black text-ink dark:text-white">Confirm Action</h3>
+            <p id="confirm-modal-message" class="mt-2.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">Are you sure?</p>
+            <div class="mt-7 flex flex-col-reverse sm:flex-row gap-3">
+                <button id="confirm-modal-cancel" type="button" class="w-full rounded-2xl border border-stone-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-stone-50 dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 dark:hover:bg-slate-800">
+                    Cancel
+                </button>
+                <button id="confirm-modal-ok" type="button" class="w-full rounded-2xl bg-coral px-5 py-3 text-sm font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c]">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            let userData = null;
+            let userBookings = [];
+
+            function renderUserProfile(data) {
+                userData = data;
+                const fullName = data.name || data.full_name || 'MAXSHOW Member';
+                const firstName = fullName.split(' ')[0] || fullName;
+                const username = data.username ? `@${data.username}` : '@user';
+                const email = data.email || '';
+                const phone = data.phone || data.phone_number || 'Not provided';
+                const initial = fullName.trim().charAt(0).toUpperCase() || 'M';
+
+                const welcomeEl = document.getElementById('welcome-name');
+                if (welcomeEl) welcomeEl.textContent = `Hello, ${firstName}`;
+                const profUsernameEl = document.getElementById('profile-username');
+                if (profUsernameEl) profUsernameEl.textContent = username;
+                const profNameEl = document.getElementById('profile-name');
+                if (profNameEl) profNameEl.textContent = fullName;
+                const profEmailEl = document.getElementById('profile-email');
+                if (profEmailEl) profEmailEl.textContent = email;
+                const profPhoneEl = document.getElementById('profile-phone');
+                if (profPhoneEl) profPhoneEl.textContent = phone;
+                const profInitEl = document.getElementById('profile-initial');
+                if (profInitEl) profInitEl.textContent = initial;
+            }
+
+            try {
+                const res = await apiRequest('/api/auth/me');
+                userData = res.user;
+            } catch (authErr) {
+                window.location.href = 'user.html';
+                return;
+            }
+
+            if (!userData) {
+                window.location.href = 'user.html';
+                return;
+            }
+
+            renderUserProfile(userData);
+
+            // Edit Profile Modal Handling
+            const editModal = document.getElementById('edit-profile-modal');
+            const openEditBtn = document.getElementById('open-edit-profile-btn');
+            const closeEditBtn = document.getElementById('close-edit-modal-btn');
+            const cancelEditBtn = document.getElementById('cancel-edit-modal-btn');
+            const editForm = document.getElementById('edit-profile-form');
+            const editErrorMsg = document.getElementById('edit-error-msg');
+
+            function showEditModal() {
+                if (!userData) return;
+                document.getElementById('edit-fullname').value = userData.name || userData.full_name || '';
+                document.getElementById('edit-username').value = userData.username || '';
+                document.getElementById('edit-email').value = userData.email || '';
+                const phoneVal = userData.phone || userData.phone_number || '';
+                document.getElementById('edit-phone').value = (phoneVal && phoneVal !== 'Not provided') ? phoneVal : '';
+                editErrorMsg.classList.add('hidden');
+                editModal.classList.remove('hidden');
+            }
+
+            function hideEditModal() {
+                editModal.classList.add('hidden');
+            }
+
+            openEditBtn?.addEventListener('click', showEditModal);
+            closeEditBtn?.addEventListener('click', hideEditModal);
+            cancelEditBtn?.addEventListener('click', hideEditModal);
+            editModal?.addEventListener('click', (e) => {
+                if (e.target === editModal) hideEditModal();
+            });
+
+            // Real-time phone number sanitization (numbers only)
+            document.getElementById('edit-phone')?.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+            });
+
+            // Real-time username sanitization
+            document.getElementById('edit-username')?.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 30);
+            });
+
+            editForm?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                editErrorMsg.classList.add('hidden');
+
+                const fullName = document.getElementById('edit-fullname').value.trim();
+                const username = document.getElementById('edit-username').value.trim().toLowerCase();
+                const email = document.getElementById('edit-email').value.trim().toLowerCase();
+                const phone = document.getElementById('edit-phone').value.trim();
+
+                if (phone.length !== 10) {
+                    editErrorMsg.textContent = 'Please enter a valid 10-digit mobile number.';
+                    editErrorMsg.classList.remove('hidden');
+                    return;
+                }
+
+                const saveBtn = document.getElementById('save-profile-btn');
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+
+                try {
+                    const res = await apiRequest('/api/auth/profile', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            full_name: fullName,
+                            username: username,
+                            email: email,
+                            mobile: phone,
+                        }),
+                    });
+
+                    renderUserProfile(res.user);
+                    hideEditModal();
+                    showToast('Profile updated successfully! 🎉');
+                } catch (err) {
+                    editErrorMsg.textContent = err.message || 'Failed to update profile. Please try again.';
+                    editErrorMsg.classList.remove('hidden');
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Changes';
+                }
+            });
+
+            const modal = document.getElementById('booking-modal');
+            const modalContent = document.getElementById('modal-booking-content');
+            const modalEventLink = document.getElementById('modal-event-link');
+            const closeModalBtn = document.getElementById('close-booking-modal');
+            const modalCloseBtn = document.getElementById('modal-close-btn');
+
+            function openBookingDetails(booking) {
+                if (!booking) return;
+                const totalAmount = Number(booking.total ?? booking.price ?? 0);
+                const isFree = totalAmount === 0 || booking.payment_status === 'Free Entry' || booking.payment_id === 'FREE';
+                const badgeBg = isFree ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
+                const badgeText = isFree ? '🔵 Free Entry' : '🟢 Paid (Razorpay)';
+                const bookingCode = booking.booking_id || `BKG-${booking.id}`;
+                const eventCode = booking.event_id || 'N/A';
+                const formattedDate = booking.created_at ? new Date(booking.created_at).toLocaleString('en-IN', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                }) : 'Recently booked';
+
+                const attendeeName = (userData && (userData.name || userData.full_name)) || 'MAXSHOW Member';
+                const attendeeUsername = (userData && userData.username) ? `@${userData.username}` : '';
+                const attendeeEmail = (userData && userData.email) || '';
+                const attendeePhone = (userData && (userData.phone || userData.phone_number)) || 'Not provided';
+
+                modalContent.innerHTML = `
+                    <!-- Event Overview Header -->
+                    <div class="flex items-center gap-4 rounded-2xl bg-stone-50 p-4 dark:bg-[#101820] border border-stone-200/70 dark:border-slate-700/60">
+                        ${booking.event_image ? `<img src="${escapeHtml(booking.event_image)}" alt="Cover" class="h-20 w-20 rounded-xl object-cover shrink-0">` : ''}
+                        <div class="min-w-0 flex-1">
+                            <span class="rounded-full ${badgeBg} px-2.5 py-0.5 text-xs font-black">${badgeText}</span>
+                            <h3 class="mt-1.5 text-lg font-black text-ink dark:text-white line-clamp-1">${escapeHtml(booking.title || 'Event')}</h3>
+                            <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-300 line-clamp-1">📍 ${escapeHtml(booking.location || '')}</p>
+                            <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-300 font-semibold">🕒 ${escapeHtml(booking.time || '')}</p>
+                        </div>
+                    </div>
+
+                    <!-- Unique IDs Section -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="rounded-2xl border border-stone-200 bg-white p-3.5 dark:border-slate-700 dark:bg-[#151f2b]">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Booking ID</p>
+                            <p class="mt-1 font-mono text-sm font-black text-coral break-all">${escapeHtml(bookingCode)}</p>
+                        </div>
+                        <div class="rounded-2xl border border-stone-200 bg-white p-3.5 dark:border-slate-700 dark:bg-[#151f2b]">
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Event ID</p>
+                            <p class="mt-1 font-mono text-sm font-black text-ink dark:text-white break-all">${escapeHtml(eventCode)}</p>
+                        </div>
+                    </div>
+
+                    <!-- Payment & Ticket Details -->
+                    <div class="rounded-2xl border border-stone-200 bg-white p-4 dark:border-slate-700 dark:bg-[#151f2b] space-y-3">
+                        <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Payment &amp; Reservation Details</p>
+                        
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">Tickets Reserved</span>
+                            <span class="font-black text-ink dark:text-white">${booking.tickets || 1} ticket${(booking.tickets || 1) === 1 ? '' : 's'}</span>
+                        </div>
+
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">Total Amount</span>
+                            <span class="text-base font-black text-coral">${isFree ? 'Free entry (₹0)' : formatPrice(totalAmount)}</span>
+                        </div>
+
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-slate-500 dark:text-slate-400">Payment Status</span>
+                            <span class="font-bold text-ink dark:text-white">${isFree ? 'Free Registration' : 'Verified via Razorpay'}</span>
+                        </div>
+
+                        ${booking.payment_id && booking.payment_id !== 'FREE' ? `
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-stone-100 pt-2.5 dark:border-slate-700 text-sm">
+                                <span class="text-slate-500 dark:text-slate-400">Razorpay Payment ID</span>
+                                <span class="font-mono text-xs font-black text-ink dark:text-white break-all">${escapeHtml(booking.payment_id)}</span>
+                            </div>
+                        ` : ''}
+
+                        <div class="flex items-center justify-between border-t border-stone-100 pt-2.5 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+                            <span>Booked Date</span>
+                            <span class="font-semibold">${formattedDate}</span>
+                        </div>
+                    </div>
+
+                    <!-- Customer Contact Info -->
+                    <div class="rounded-2xl bg-cream/70 p-4 dark:bg-[#101820] text-xs space-y-1 text-slate-600 dark:text-slate-300">
+                        <p class="font-bold text-ink dark:text-white">Attendee details</p>
+                        <p>👤 <strong>${escapeHtml(attendeeName)}</strong> ${attendeeUsername ? `(${escapeHtml(attendeeUsername)})` : ''}</p>
+                        <p>✉️ ${escapeHtml(attendeeEmail)} ${attendeePhone && attendeePhone !== 'Not provided' ? `· 📞 ${escapeHtml(attendeePhone)}` : ''}</p>
+                    </div>
+                `;
+
+                if (booking.event_slug) {
+                    modalEventLink.href = `event.html?event=${encodeURIComponent(booking.event_slug)}`;
+                    modalEventLink.classList.remove('hidden');
+                } else {
+                    modalEventLink.classList.add('hidden');
+                }
+
+                modal.classList.remove('hidden');
+            }
+
+            function hideModal() {
+                modal.classList.add('hidden');
+            }
+
+            closeModalBtn?.addEventListener('click', hideModal);
+            modalCloseBtn?.addEventListener('click', hideModal);
+            modal?.addEventListener('click', (e) => {
+                if (e.target === modal) hideModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    hideModal();
+                }
+            });
+
+            try {
+                const { bookings } = await apiRequest('/api/bookings');
+                userBookings = Array.isArray(bookings) ? bookings : [];
+                const tickets = userBookings.reduce((total, booking) => total + (booking.tickets || 0), 0);
+                const countEl = document.getElementById('booking-count');
+                if (countEl) countEl.textContent = `${tickets} ticket${tickets === 1 ? '' : 's'}`;
+
+                const list = document.getElementById('booking-list');
+                const emptyEl = document.getElementById('empty-bookings');
+
+                if (!userBookings.length) {
+                    if (emptyEl) emptyEl.classList.remove('hidden');
+                    if (list) list.innerHTML = '';
+                } else {
+                    if (emptyEl) emptyEl.classList.add('hidden');
+                    if (list) {
+                        list.innerHTML = userBookings.map((booking, idx) => {
+                            const isFree = booking.total === 0 || booking.payment_status === 'Free Entry';
+                            const badgeBg = isFree ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
+                            const badgeText = isFree ? '🔵 Free Entry' : '🟢 Paid (Razorpay)';
+
+                            return `
+                                <article data-booking-index="${idx}" class="group overflow-hidden rounded-3xl bg-white p-5 shadow-sm hover:shadow-md transition-all duration-200 hover:border-coral/50 cursor-pointer dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700">
+                                    <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                                        <div class="flex items-center gap-4">
+                                            ${booking.event_image ? `<img src="${escapeHtml(booking.event_image)}" alt="Event cover" class="h-16 w-16 rounded-2xl object-cover shrink-0 group-hover:scale-105 transition duration-200">` : ''}
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="rounded-full ${badgeBg} px-2.5 py-0.5 text-xs font-black">${badgeText}</span>
+                                                </div>
+                                                <h3 class="mt-1.5 text-lg font-black text-ink group-hover:text-coral transition dark:text-white">${escapeHtml(booking.title || 'Event')}</h3>
+                                                <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-300">📍 ${escapeHtml(booking.location || '')} · 🕒 ${escapeHtml(booking.time || '')}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center justify-between sm:justify-end gap-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-stone-100 dark:border-slate-700">
+                                            <div class="text-left sm:text-right">
+                                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Reserved</p>
+                                                <p class="font-black text-ink dark:text-white text-base">${booking.tickets || 1} ticket${(booking.tickets || 1) === 1 ? '' : 's'}</p>
+                                                <p class="text-sm font-black text-coral">${isFree ? 'Free' : formatPrice(booking.total)}</p>
+                                            </div>
+                                            <div class="grid h-9 w-9 place-items-center rounded-xl bg-stone-100 text-slate-500 group-hover:bg-coral group-hover:text-white transition dark:bg-slate-800 dark:text-slate-300">
+                                                →
+                                            </div>
+                                        </div>
+                                    </div>
+                                </article>
+                            `;
+                        }).join('');
+
+                        list.querySelectorAll('[data-booking-index]').forEach(card => {
+                            card.addEventListener('click', () => {
+                                const index = Number(card.dataset.bookingIndex);
+                                const booking = userBookings[index];
+                                if (booking) openBookingDetails(booking);
+                            });
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch bookings:', err);
+            }
+
+            function showConfirmModal({
+                title = 'Confirm Action',
+                message = 'Are you sure you want to proceed?',
+                icon = '⚠️',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                type = 'danger',
+            } = {}) {
+                return new Promise((resolve) => {
+                    const modal = document.getElementById('maxshow-confirm-modal');
+                    if (!modal) {
+                        resolve(window.confirm(message));
+                        return;
+                    }
+
+                    const iconEl = modal.querySelector('#confirm-modal-icon');
+                    const iconContainer = modal.querySelector('#confirm-modal-icon-container');
+                    const titleEl = modal.querySelector('#confirm-modal-title');
+                    const messageEl = modal.querySelector('#confirm-modal-message');
+                    const cancelBtn = modal.querySelector('#confirm-modal-cancel');
+                    const okBtn = modal.querySelector('#confirm-modal-ok');
+
+                    iconEl.textContent = icon;
+                    titleEl.textContent = title;
+                    messageEl.textContent = message;
+                    cancelBtn.textContent = cancelText;
+                    okBtn.textContent = confirmText;
+
+                    if (type === 'danger') {
+                        iconContainer.className = 'mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-100 text-3xl dark:bg-red-950/60 text-red-600 dark:text-red-400 shadow-sm';
+                        okBtn.className = 'w-full rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/25 transition hover:bg-red-700';
+                    } else if (type === 'logout') {
+                        iconContainer.className = 'mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-coral/10 text-3xl text-coral dark:bg-coral/20 shadow-sm';
+                        okBtn.className = 'w-full rounded-2xl bg-coral px-5 py-3 text-sm font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c]';
+                    } else {
+                        iconContainer.className = 'mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-coral/10 text-3xl text-coral dark:bg-coral/20 shadow-sm';
+                        okBtn.className = 'w-full rounded-2xl bg-coral px-5 py-3 text-sm font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c]';
+                    }
+
+                    modal.classList.remove('hidden');
+
+                    function cleanup(result) {
+                        modal.classList.add('hidden');
+                        cancelBtn.onclick = null;
+                        okBtn.onclick = null;
+                        document.removeEventListener('keydown', keyHandler);
+                        modal.onclick = null;
+                        resolve(result);
+                    }
+
+                    function keyHandler(e) {
+                        if (e.key === 'Escape') cleanup(false);
+                    }
+
+                    cancelBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cleanup(false);
+                    };
+                    okBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cleanup(true);
+                    };
+                    modal.onclick = (e) => {
+                        if (e.target === modal) cleanup(false);
+                    };
+                    document.addEventListener('keydown', keyHandler);
+                });
+            }
+
+            document.getElementById('logout-button')?.addEventListener('click', async () => {
+                const confirmed = await showConfirmModal({
+                    title: 'Log out of MAXSHOW?',
+                    message: 'You will need to sign in again to access your account and booked tickets.',
+                    icon: '🚪',
+                    confirmText: 'Log out',
+                    cancelText: 'Stay signed in',
+                    type: 'logout',
+                });
+                if (!confirmed) return;
+                try {
+                    await apiRequest('/api/auth/logout', { method: 'POST' });
+                } catch (_) {}
+                window.location.href = 'index.html';
+            });
+        });
+    </script>
+</body>
+</html>

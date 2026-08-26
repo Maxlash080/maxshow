@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create account — MAXSHOW</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'}}}}</script>
+    <link rel="stylesheet" href="theme.css?v=2">
+    <script src="theme.js" defer></script>
+    <script src="common.js" defer></script>
+    <script src="auth.js" defer></script>
+</head>
+<body class="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white">
+    <header class="border-b border-stone-200 bg-cream dark:border-slate-800 dark:bg-[#1c2733]">
+        <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+            <a href="index.html" class="flex items-center gap-2.5">
+                <span class="grid h-10 w-10 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-sm shadow-coral/30">M</span>
+                <span class="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+            </a>
+            <a href="user.html" class="text-sm font-bold text-slate-600 transition hover:text-coral dark:text-slate-300 dark:hover:text-coral">Already a member? Sign in</a>
+        </div>
+    </header>
+
+    <main class="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-12 px-5 py-12 lg:grid-cols-[.9fr_1.1fr] lg:px-8">
+        <section class="hidden lg:block">
+            <p class="text-sm font-bold uppercase tracking-[.16em] text-coral">Join your city</p>
+            <h1 class="mt-4 max-w-lg text-6xl font-black leading-[.98] tracking-tight text-ink dark:text-white">Make more room for good plans.</h1>
+            <p class="mt-6 max-w-md text-lg leading-8 text-slate-600 dark:text-slate-300">Create a MAXSHOW account to keep your tickets, favourites, and upcoming experiences in one easy place.</p>
+            <div class="mt-10 flex gap-3">
+                <span class="rounded-2xl bg-[#D2E8E3] px-5 py-4 text-2xl shadow-sm text-ink">🎵</span>
+                <span class="rounded-2xl bg-[#E7DBF3] px-5 py-4 text-2xl shadow-sm text-ink">🎨</span>
+                <span class="rounded-2xl bg-[#F9D9B7] px-5 py-4 text-2xl shadow-sm text-ink">🍜</span>
+            </div>
+        </section>
+
+        <section class="mx-auto w-full max-w-xl rounded-[2rem] bg-white p-7 shadow-xl shadow-stone-300/30 dark:bg-[#1c2733] dark:border dark:border-slate-700 sm:p-9">
+            <p class="text-sm font-bold uppercase tracking-[.16em] text-coral">Start exploring</p>
+            <h2 class="mt-2 text-3xl font-black text-ink dark:text-white">Create your account</h2>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">A few details and you’re ready to book.</p>
+
+            <form id="registration-form" class="mt-7 grid gap-5 sm:grid-cols-2" novalidate>
+                <div>
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="full_name">Full name</label>
+                    <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="full_name" name="full_name" type="text" placeholder="Letters only (e.g. Rahul Sharma)" required>
+                </div>
+                <div>
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="username">Username</label>
+                    <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="username" name="username" type="text" placeholder="e.g. rahul_99 (letters, numbers, _)" maxlength="30" autocomplete="username" required>
+                </div>
+                
+                <!-- Email with Send OTP action -->
+                <div class="sm:col-span-2">
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="email">Email address</label>
+                    <div class="flex gap-2">
+                        <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="email" name="email" type="email" placeholder="you@example.com" required>
+                        <button id="send-otp-btn" type="button" class="shrink-0 rounded-xl bg-coral px-5 py-3.5 text-xs font-bold text-white shadow-md shadow-coral/20 hover:bg-[#df503c] transition whitespace-nowrap">
+                            Send OTP
+                        </button>
+                    </div>
+                </div>
+
+                <!-- OTP Input Section (Collapsible / Active) -->
+                <div id="otp-section" class="sm:col-span-2 rounded-2xl bg-coral/5 border border-coral/20 p-4 dark:bg-[#151f2b] dark:border-slate-700 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-coral" for="otp">Enter 6-Digit OTP *</label>
+                        <span id="otp-timer" class="text-xs font-bold text-slate-500 dark:text-slate-400"></span>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2.5">
+                        <div class="relative flex-1">
+                            <input class="w-full rounded-xl border border-stone-300 px-4 py-3 text-base font-mono font-bold tracking-[0.35em] text-center outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="otp" name="otp" type="text" inputmode="numeric" maxlength="6" placeholder="------" required>
+                        </div>
+                        <button id="verify-otp-btn" type="button" class="rounded-xl bg-ink text-white dark:bg-slate-800 dark:text-white px-5 py-3 text-xs font-bold transition hover:bg-coral dark:hover:bg-coral whitespace-nowrap">
+                            Verify OTP
+                        </button>
+                    </div>
+                    <p id="otp-status-msg" class="text-xs font-semibold text-slate-500 dark:text-slate-400">Enter your email and click "Send OTP" to receive your verification code.</p>
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="mobile">Mobile number</label>
+                    <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="mobile" name="mobile" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required>
+                </div>
+                <div>
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="password">Password</label>
+                    <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="password" name="password" type="password" placeholder="At least 6 characters" required>
+                </div>
+                <div>
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="confirm_password">Confirm password</label>
+                    <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="confirm_password" name="confirm_password" type="password" placeholder="Re-enter password" required>
+                </div>
+                <button class="sm:col-span-2 w-full rounded-2xl bg-coral px-5 py-4 text-base font-bold text-white transition hover:bg-[#df503c] shadow-lg shadow-coral/25" type="submit">
+                    Create my MAXSHOW account
+                </button>
+            </form>
+
+            <p class="mt-7 text-center text-sm text-slate-600 dark:text-slate-400">
+                Already have an account? <a class="font-bold text-coral hover:underline" href="user.html">Sign in</a>
+            </p>
+        </section>
+    </main>
+</body>
+</html>
+
+
+
+
+

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in — MAXSHOW</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'}}}}</script>
+    <link rel="stylesheet" href="theme.css?v=2">
+    <script src="theme.js" defer></script>
+    <script src="common.js" defer></script>
+    <script src="auth.js" defer></script>
+</head>
+<body class="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white">
+    <header class="border-b border-stone-200 bg-cream dark:border-slate-800 dark:bg-[#1c2733]">
+        <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+            <a href="index.html" class="flex items-center gap-2.5">
+                <span class="grid h-10 w-10 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-sm shadow-coral/30">M</span>
+                <span class="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+            </a>
+            <a href="index.html" class="text-sm font-bold text-slate-600 transition hover:text-coral dark:text-slate-300 dark:hover:text-coral">← Back to home</a>
+        </div>
+    </header>
+
+    <main class="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-12 px-5 py-12 lg:grid-cols-2 lg:px-8">
+        <section class="hidden lg:block">
+            <p class="text-sm font-bold uppercase tracking-[.16em] text-coral">Welcome back</p>
+            <h1 class="mt-4 max-w-lg text-6xl font-black leading-[.98] tracking-tight text-ink dark:text-white">Your next good plan is waiting.</h1>
+            <p class="mt-6 max-w-md text-lg leading-8 text-slate-600 dark:text-slate-300">Sign in to manage your bookings, save events, and keep your weekends full of things worth doing.</p>
+            <div class="mt-10 rounded-[2rem] bg-[#F9D9B7] p-7 text-ink shadow-sm">
+                <p class="text-3xl">✦</p>
+                <p class="mt-4 text-lg font-black">A little more local.</p>
+                <p class="mt-1 text-sm leading-6 text-slate-700">Experiences across Pimpri, Chinchwad, Hinjawadi, Punawale, Kasarwadi, Nigdi, and Aundh.</p>
+            </div>
+        </section>
+
+        <section class="mx-auto w-full max-w-md rounded-[2rem] bg-white p-7 shadow-xl shadow-stone-300/30 dark:bg-[#1c2733] dark:border dark:border-slate-700 sm:p-9">
+            <p class="text-sm font-bold uppercase tracking-[.16em] text-coral">Account</p>
+            <h2 class="mt-2 text-3xl font-black text-ink dark:text-white">Sign in</h2>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Enter your details to continue your booking.</p>
+
+            <form id="login-form" class="mt-7 space-y-5" novalidate>
+                <div>
+                    <label class="mb-2 block text-sm font-bold text-ink dark:text-slate-200" for="email">Email address or username</label>
+                    <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="email" name="email" type="text" placeholder="you@example.com or username" required>
+                </div>
+                <div>
+                    <div class="mb-2 flex items-center justify-between">
+                        <label class="text-sm font-bold text-ink dark:text-slate-200" for="password">Password</label>
+                        <a class="text-xs font-bold text-coral hover:underline" href="#">Forgot password?</a>
+                    </div>
+                    <div class="relative">
+                        <input class="w-full rounded-xl border border-stone-300 px-4 py-3.5 pr-11 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" id="password" name="password" type="password" placeholder="Enter your password" required>
+                        <button type="button" id="toggle-password-btn" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-ink dark:hover:text-white text-base focus:outline-none" aria-label="Toggle password visibility">
+                            👁
+                        </button>
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <input class="h-4 w-4 rounded border-stone-300 text-coral focus:ring-coral dark:border-slate-600 dark:bg-[#101820]" name="remember_me" type="checkbox">
+                    Remember me
+                </label>
+                <button class="w-full rounded-2xl bg-coral px-5 py-4 text-base font-bold text-white transition hover:bg-[#df503c] shadow-lg shadow-coral/25" type="submit">
+                    Sign in to MAXSHOW
+                </button>
+            </form>
+
+            <p class="mt-7 text-center text-sm text-slate-600 dark:text-slate-400">
+                New here? <a class="font-bold text-coral hover:underline" href="registration.html">Create an account</a>
+            </p>
+            <div class="my-6 border-t border-stone-100 dark:border-slate-700/80"></div>
+            <p class="text-center text-sm text-slate-500 dark:text-slate-400">
+                Organising an event? <a class="font-bold text-ink hover:text-coral dark:text-white dark:hover:text-coral" href="admin.html">Use the organiser portal →</a>
+            </p>
+        </section>
+    </main>
+</body>
+</html>
+
+
+
+
+

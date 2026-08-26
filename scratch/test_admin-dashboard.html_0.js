@@ -1,0 +1,1 @@
+tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'}}}}

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event details — MAXSHOW</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'},boxShadow:{soft:'0 18px 45px rgba(28,34,41,.10)'}}}}</script>
+    <link rel="stylesheet" href="theme.css?v=2">
+    <script src="theme.js" defer></script>
+    <script src="common.js" defer></script>
+</head>
+<body class="min-h-screen bg-cream text-ink antialiased dark:bg-[#101820] dark:text-white">
+    <header class="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
+        <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <a href="index.html" class="flex items-center gap-2.5">
+                <span class="grid h-10 w-10 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-sm shadow-coral/30">M</span>
+                <span class="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+            </a>
+            <div class="flex items-center gap-2 sm:gap-3 pr-10 sm:pr-0">
+                <a href="index.html#discover" class="rounded-full border border-stone-300 bg-white px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold transition hover:border-ink dark:border-slate-700 dark:bg-[#1c2733] dark:text-white">← <span class="hidden sm:inline">All experiences</span><span class="sm:hidden">Events</span></a>
+                <span id="account-action"></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8 lg:px-8 lg:py-12">
+        <div class="mb-5 sm:mb-7 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <a class="hover:text-coral" href="index.html">Home</a>
+            <span class="px-1.5 sm:px-2">/</span>
+            <a class="hover:text-coral" href="index.html#discover">Experiences</a>
+            <span class="px-1.5 sm:px-2">/</span>
+            <span id="crumb" class="text-ink dark:text-white">Event</span>
+        </div>
+
+        <div class="grid gap-8 lg:grid-cols-[1.4fr_.9fr] lg:gap-10">
+            <section>
+                <div class="overflow-hidden rounded-2xl sm:rounded-[2.5rem] shadow-sm">
+                    <img id="event-image" class="h-60 sm:h-96 lg:h-[460px] w-full object-cover" alt="Event image">
+                </div>
+                <div class="mt-6 sm:mt-8">
+                    <p id="event-type" class="text-xs sm:text-sm font-bold uppercase tracking-[.16em] text-coral"></p>
+                    <h1 id="event-title" class="mt-2 sm:mt-3 text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-ink dark:text-white"></h1>
+                    <p id="event-venue" class="mt-2 sm:mt-3 text-base sm:text-lg text-slate-600 dark:text-slate-300"></p>
+                </div>
+                <div class="mt-8 sm:mt-10 border-t border-stone-200 pt-6 sm:pt-8 dark:border-slate-700">
+                    <h2 class="text-xl sm:text-2xl font-black text-ink dark:text-white">About this experience</h2>
+                    <p id="event-description" class="mt-3 sm:mt-4 max-w-2xl text-sm sm:text-base leading-7 text-slate-600 dark:text-slate-300"></p>
+                </div>
+                <div class="mt-8 sm:mt-10 grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+                    <div class="rounded-2xl bg-white p-4 sm:p-5 shadow-sm dark:bg-[#1c2733] border border-stone-100 dark:border-slate-700">
+                        <p class="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400">Date &amp; time</p>
+                        <p id="event-time" class="mt-1.5 sm:mt-2 text-base sm:text-lg font-black text-ink dark:text-white"></p>
+                    </div>
+                    <div class="rounded-2xl bg-white p-4 sm:p-5 shadow-sm dark:bg-[#1c2733] border border-stone-100 dark:border-slate-700">
+                        <p class="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400">Location</p>
+                        <p id="event-location" class="mt-1.5 sm:mt-2 text-base sm:text-lg font-black text-ink dark:text-white"></p>
+                    </div>
+                </div>
+            </section>
+
+            <aside>
+                <div class="sticky top-24 rounded-2xl sm:rounded-[2rem] border border-stone-200 bg-white p-5 sm:p-6 shadow-soft dark:border-slate-700 dark:bg-[#1c2733]">
+                    <p class="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400">Tickets from</p>
+                    <p id="event-price" class="mt-1 text-2xl sm:text-3xl font-black text-coral"></p>
+                    <div class="my-5 sm:my-6 border-t border-stone-100 dark:border-slate-700"></div>
+                    <p class="text-xs sm:text-sm font-bold text-ink dark:text-white">Number of tickets</p>
+                    <div class="mt-3 grid grid-cols-4 gap-2">
+                        <button data-quantity="1" class="quantity-box rounded-xl border-2 border-coral bg-[#FFF2EE] py-3 text-sm sm:text-base font-black text-coral dark:bg-coral/20" type="button">1</button>
+                        <button data-quantity="2" class="quantity-box rounded-xl border border-stone-300 py-3 text-sm sm:text-base font-black hover:border-coral dark:border-slate-600 dark:text-white" type="button">2</button>
+                        <button data-quantity="3" class="quantity-box rounded-xl border border-stone-300 py-3 text-sm sm:text-base font-black hover:border-coral dark:border-slate-600 dark:text-white" type="button">3</button>
+                        <button data-quantity="4" class="quantity-box rounded-xl border border-stone-300 py-3 text-sm sm:text-base font-black hover:border-coral dark:border-slate-600 dark:text-white" type="button">4</button>
+                    </div>
+                    <label for="custom-tickets" class="mt-4 block text-xs sm:text-sm font-bold text-ink dark:text-white">Custom number of tickets</label>
+                    <input id="custom-tickets" type="number" min="1" max="20" class="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm font-semibold outline-none transition focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="For example: 5">
+                    <div class="mt-4 flex justify-between rounded-xl bg-cream p-3.5 sm:p-4 text-xs sm:text-sm dark:bg-[#101820]">
+                        <span class="font-semibold text-slate-600 dark:text-slate-400">Total</span>
+                        <span id="ticket-total" class="font-black text-ink dark:text-white text-base"></span>
+                    </div>
+                    <button id="book-button" class="mt-5 w-full rounded-2xl bg-coral px-5 py-3.5 sm:py-4 text-sm sm:text-base font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c]">Book tickets</button>
+                    <p class="mt-3 sm:mt-4 text-center text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">You can book up to 20 tickets in one order.</p>
+                </div>
+            </aside>
+        </div>
+    </main>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const eventSlug = new URLSearchParams(window.location.search).get('event') || 'blue-room';
+            const selected = { ...((typeof FALLBACK_EVENTS !== 'undefined' && FALLBACK_EVENTS[eventSlug]) || FALLBACK_EVENTS['blue-room']) };
+            let ticketQuantity = 1;
+            const ticketBoxes = document.querySelectorAll('.quantity-box');
+            const customTickets = document.getElementById('custom-tickets');
+
+            function renderEventDetails() {
+                document.title = `${selected.title} — MAXSHOW`;
+                document.getElementById('crumb').textContent = selected.title;
+                document.getElementById('event-title').textContent = selected.title;
+                document.getElementById('event-type').textContent = selected.type || selected.event_type || '';
+                document.getElementById('event-venue').textContent = selected.venue;
+                document.getElementById('event-time').textContent = selected.time;
+                document.getElementById('event-location').textContent = selected.location;
+                document.getElementById('event-price').textContent = formatPrice(selected.price);
+                document.getElementById('event-description').textContent = selected.description;
+                document.getElementById('event-image').src = selected.image;
+                updateTicketQuantity();
+            }
+
+            function updateTicketQuantity() {
+                const total = (selected.price || 0) * ticketQuantity;
+                document.getElementById('ticket-total').textContent = total === 0 ? 'Free' : `₹${total}`;
+                ticketBoxes.forEach(box => {
+                    const active = Number(box.dataset.quantity) === ticketQuantity;
+                    box.className = `quantity-box rounded-xl py-3 font-black ${active ? 'border-2 border-coral bg-[#FFF2EE] text-coral' : 'border border-stone-300 hover:border-coral'}`;
+                });
+                if (ticketQuantity <= 4 && customTickets) customTickets.value = '';
+            }
+
+            ticketBoxes.forEach(box => box.addEventListener('click', () => {
+                ticketQuantity = Number(box.dataset.quantity);
+                updateTicketQuantity();
+            }));
+
+            customTickets?.addEventListener('input', () => {
+                const value = Number(customTickets.value);
+                if (value >= 1 && value <= 20) {
+                    ticketQuantity = value;
+                    updateTicketQuantity();
+                }
+            });
+
+            document.getElementById('book-button')?.addEventListener('click', () => {
+                localStorage.setItem('MAXSHOWBooking', JSON.stringify({
+                    ...selected,
+                    event_id: selected.id,
+                    event_custom_id: selected.custom_id,
+                    event_slug: selected.slug || eventSlug,
+                    quantity: ticketQuantity,
+                }));
+                window.location.href = 'booking.html';
+            });
+
+            renderEventDetails();
+
+            // Fetch live event data
+            apiRequest(`/api/events/${encodeURIComponent(eventSlug)}`)
+                .then(({ event }) => {
+                    if (event) {
+                        Object.assign(selected, event);
+                        renderEventDetails();
+                    }
+                })
+                .catch(() => {});
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+

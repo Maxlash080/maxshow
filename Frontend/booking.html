@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete booking — MAXSHOW</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'}}}}</script>
+    <link rel="stylesheet" href="theme.css?v=2">
+    <script src="theme.js" defer></script>
+    <script src="common.js" defer></script>
+    <!-- Razorpay Checkout Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body class="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white antialiased">
+    <header class="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
+        <div class="mx-auto flex h-20 max-w-5xl items-center justify-between px-4 sm:px-6">
+            <a href="index.html" class="flex items-center gap-2.5">
+                <span class="grid h-10 w-10 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-sm shadow-coral/30">M</span>
+                <span class="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+            </a>
+            <span class="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400">🔒 Secure booking</span>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-5xl px-4 sm:px-6 py-8 sm:py-12">
+        <a href="javascript:history.back()" class="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-coral transition">← Back to event</a>
+        <div class="mt-6 sm:mt-7 grid gap-6 sm:gap-8 lg:grid-cols-[1.15fr_.85fr]">
+            <!-- Dynamic Main Section -->
+            <section class="rounded-2xl sm:rounded-[2rem] bg-white p-5 sm:p-8 shadow-sm dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700">
+                <!-- Guest View (shown when NOT signed in) -->
+                <div id="guest-view">
+                    <p class="text-xs sm:text-sm font-bold uppercase tracking-wider text-coral">Almost there</p>
+                    <h1 class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black text-ink dark:text-white">Complete your booking</h1>
+                    <p class="mt-2 sm:mt-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Sign in to securely save your tickets and continue to payment.</p>
+                    <form id="booking-form" class="mt-6 sm:mt-7 space-y-4">
+                        <div>
+                            <label class="mb-2 block text-xs sm:text-sm font-bold text-ink dark:text-slate-200" for="name">Full name</label>
+                            <input id="name" required class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="Your name">
+                        </div>
+                        <div>
+                            <label class="mb-2 block text-xs sm:text-sm font-bold text-ink dark:text-slate-200" for="email">Email address</label>
+                            <input id="email" required type="email" class="w-full rounded-xl border border-stone-300 px-4 py-3.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white" placeholder="you@example.com">
+                        </div>
+                        <button class="w-full rounded-2xl bg-coral px-5 py-3.5 sm:py-4 text-sm sm:text-base font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c]" type="submit">
+                            Continue to sign in
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Authenticated User View (shown when signed in) -->
+                <div id="user-view" class="hidden">
+                    <p class="text-xs sm:text-sm font-bold uppercase tracking-wider text-coral">Review &amp; Pay</p>
+                    <h1 class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black text-ink dark:text-white">Ticket Details</h1>
+                    <p class="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Review your ticket reservation below and proceed to payment.</p>
+
+                    <!-- User Account Summary Card -->
+                    <div class="mt-5 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-cream p-3.5 sm:p-4 dark:bg-[#101820] border border-stone-100 dark:border-slate-700/60">
+                        <div class="flex items-center gap-3">
+                            <div id="user-avatar" class="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-full bg-coral text-base sm:text-lg font-black text-white shadow-sm shadow-coral/25">U</div>
+                            <div>
+                                <p id="user-name" class="text-sm sm:text-base font-black leading-tight text-ink dark:text-white"></p>
+                                <p id="user-email" class="text-xs text-slate-500 dark:text-slate-400"></p>
+                            </div>
+                        </div>
+                        <a href="user.html" class="text-xs font-bold text-coral hover:underline shrink-0">Switch account</a>
+                    </div>
+
+                    <!-- Ticket & Booking Details -->
+                    <div class="mt-5 sm:mt-6 space-y-3 rounded-2xl border border-stone-200 p-4 sm:p-5 dark:border-slate-700 bg-stone-50/50 dark:bg-[#101820]/50">
+                        <div class="flex justify-between text-xs sm:text-sm">
+                            <span class="font-semibold text-slate-500 dark:text-slate-400">Event</span>
+                            <span id="detail-event-title" class="font-bold text-right text-ink dark:text-white"></span>
+                        </div>
+                        <div class="flex justify-between text-xs sm:text-sm">
+                            <span class="font-semibold text-slate-500 dark:text-slate-400">Date &amp; Time</span>
+                            <span id="detail-event-time" class="font-bold text-right text-ink dark:text-white"></span>
+                        </div>
+                        <div class="flex justify-between text-xs sm:text-sm">
+                            <span class="font-semibold text-slate-500 dark:text-slate-400">Location / Venue</span>
+                            <span id="detail-event-location" class="font-bold text-right text-ink dark:text-white"></span>
+                        </div>
+                        <div class="my-2 border-t border-stone-200 dark:border-slate-700"></div>
+                        <div class="flex justify-between text-xs sm:text-sm">
+                            <span class="font-semibold text-slate-500 dark:text-slate-400">Number of tickets</span>
+                            <span id="detail-event-quantity" class="font-bold text-ink dark:text-white"></span>
+                        </div>
+                        <div class="flex justify-between text-xs sm:text-sm">
+                            <span class="font-semibold text-slate-500 dark:text-slate-400">Price per ticket</span>
+                            <span id="detail-event-price" class="font-bold text-ink dark:text-white"></span>
+                        </div>
+                        <div class="flex justify-between text-xs sm:text-sm font-bold text-ink dark:text-white pt-1">
+                            <span>Total Payable</span>
+                            <span id="detail-event-total" class="text-coral text-base font-black"></span>
+                        </div>
+                    </div>
+
+                    <div id="booking-error" class="mt-4 hidden rounded-xl bg-red-100 dark:bg-red-950/60 dark:text-red-300 p-3 text-xs sm:text-sm font-semibold text-red-800 border border-red-200 dark:border-red-800"></div>
+
+                    <!-- Direct Pay / Confirm Action -->
+                    <button id="confirm-booking-btn" class="mt-5 sm:mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-coral px-5 py-3.5 sm:py-4 text-sm sm:text-base font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c]" type="button">
+                        <span id="confirm-btn-text">Pay &amp; Confirm Booking</span>
+                    </button>
+                    <div id="booking-security-note" class="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <svg class="h-3.5 w-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a9 9 0 100 18 9 9 0 000-18zm3.707 7.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                        <span>Secured by Razorpay. Test mode enabled.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Aside Summary -->
+            <aside class="h-fit rounded-2xl sm:rounded-[2rem] border border-stone-200 bg-white p-5 sm:p-6 shadow-sm dark:bg-[#1c2733] dark:border-slate-700">
+                <p class="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400">Your booking</p>
+                <h2 id="summary-title" class="mt-1.5 sm:mt-2 text-lg sm:text-xl font-black text-ink dark:text-white">Select an event</h2>
+                <p id="summary-time" class="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300"></p>
+                <div class="my-4 sm:my-5 border-t border-stone-100 dark:border-slate-700"></div>
+                <div class="flex justify-between text-xs sm:text-sm"><span class="text-slate-500 dark:text-slate-400">Tickets</span><span id="summary-quantity" class="font-bold text-ink dark:text-white"></span></div>
+                <div class="mt-3 flex justify-between text-base sm:text-lg font-black text-ink dark:text-white"><span>Total</span><span id="summary-total" class="text-coral"></span></div>
+            </aside>
+        </div>
+    </main>
+
+    <div id="toast" class="fixed bottom-5 left-1/2 z-[60] hidden -translate-x-1/2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-soft" role="status"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const booking = JSON.parse(localStorage.getItem('MAXSHOWBooking') || 'null');
+            if (!booking) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            const unitPrice = Number(booking.price) || 0;
+            const quantity = Number(booking.quantity) || 1;
+            const totalAmount = unitPrice * quantity;
+
+            // Populate Summary
+            document.getElementById('summary-title').textContent = booking.title;
+            document.getElementById('summary-time').textContent = `${booking.time} · ${booking.location}`;
+            document.getElementById('summary-quantity').textContent = `${quantity} ticket${quantity > 1 ? 's' : ''}`;
+            document.getElementById('summary-total').textContent = totalAmount === 0 ? 'Free entry' : formatPrice(totalAmount);
+
+            // Check Authentication State
+            try {
+                const { user } = await apiRequest('/api/auth/me');
+                if (user) {
+                    // Show User Ticket Details view
+                    document.getElementById('guest-view').classList.add('hidden');
+                    const userView = document.getElementById('user-view');
+                    userView.classList.remove('hidden');
+
+                    document.getElementById('user-name').textContent = user.name;
+                    document.getElementById('user-email').textContent = user.email + (user.phone ? ` · ${user.phone}` : '');
+                    document.getElementById('user-avatar').textContent = user.name.trim().charAt(0).toUpperCase();
+
+                    document.getElementById('detail-event-title').textContent = booking.title;
+                    document.getElementById('detail-event-time').textContent = booking.time;
+                    document.getElementById('detail-event-location').textContent = booking.venue || booking.location;
+                    document.getElementById('detail-event-quantity').textContent = `${quantity} ticket${quantity > 1 ? 's' : ''}`;
+                    document.getElementById('detail-event-price').textContent = unitPrice === 0 ? 'Free entry' : formatPrice(unitPrice);
+                    document.getElementById('detail-event-total').textContent = totalAmount === 0 ? 'Free entry' : formatPrice(totalAmount);
+
+                    const confirmBtn = document.getElementById('confirm-booking-btn');
+                    const confirmBtnText = document.getElementById('confirm-btn-text');
+                    const securityNote = document.getElementById('booking-security-note');
+                    const errorBox = document.getElementById('booking-error');
+
+                    const isFreeBooking = totalAmount === 0;
+                    const defaultButtonText = isFreeBooking
+                        ? 'Confirm Free Reservation'
+                        : `Pay ${formatPrice(totalAmount)} & Confirm Booking`;
+                    confirmBtnText.textContent = defaultButtonText;
+
+                    if (securityNote) {
+                        securityNote.innerHTML = isFreeBooking
+                            ? '<svg class="h-3.5 w-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><span>Free experience · Instant reservation (No payment required)</span>'
+                            : '<svg class="h-3.5 w-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a9 9 0 100 18 9 9 0 000-18zm3.707 7.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><span>Secured by Razorpay. Test mode enabled.</span>';
+                    }
+
+                    confirmBtn.addEventListener('click', async () => {
+                        confirmBtn.disabled = true;
+                        confirmBtnText.textContent = 'Processing order...';
+                        errorBox.classList.add('hidden');
+
+                        try {
+                            // 1. Create order on backend
+                            const orderData = await apiRequest('/api/payment/create-order', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: booking.title,
+                                    location: booking.location,
+                                    time: booking.time,
+                                    price: unitPrice,
+                                    quantity: quantity,
+                                    event_id: booking.event_id || booking.id,
+                                    event_slug: booking.event_slug || booking.slug,
+                                }),
+                            });
+
+                            // If free event, booking is already created
+                            if (orderData.free) {
+                                localStorage.removeItem('MAXSHOWBooking');
+                                showToast('🎉 Free booking confirmed! Opening dashboard...');
+                                setTimeout(() => {
+                                    window.location.href = 'dashboard.html';
+                                }, 800);
+                                return;
+                            }
+
+                            // 2. Open Razorpay Checkout for paid event
+                            if (typeof Razorpay === 'undefined') {
+                                throw new Error('Razorpay SDK failed to load. Please check your internet connection and try again.');
+                            }
+
+                            const options = {
+                                key: orderData.key_id,
+                                amount: orderData.amount,
+                                currency: orderData.currency || 'INR',
+                                name: 'MAXSHOW',
+                                description: `${booking.title} (${quantity} ticket${quantity > 1 ? 's' : ''})`,
+                                order_id: orderData.order_id,
+                                prefill: {
+                                    name: user.name,
+                                    email: user.email,
+                                    contact: user.phone || '',
+                                },
+                                theme: {
+                                    color: '#F2634E',
+                                },
+                                modal: {
+                                    ondismiss: function () {
+                                        confirmBtn.disabled = false;
+                                        confirmBtnText.textContent = defaultButtonText;
+                                    },
+                                },
+                                handler: async function (response) {
+                                    confirmBtn.disabled = true;
+                                    confirmBtnText.textContent = 'Verifying payment...';
+
+                                    try {
+                                        // 3. Verify signature and create confirmed booking in database
+                                        await apiRequest('/api/payment/verify', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                razorpay_order_id: response.razorpay_order_id,
+                                                razorpay_payment_id: response.razorpay_payment_id,
+                                                razorpay_signature: response.razorpay_signature,
+                                                title: booking.title,
+                                                location: booking.location,
+                                                time: booking.time,
+                                                price: unitPrice,
+                                                quantity: quantity,
+                                                event_id: booking.event_id || booking.id,
+                                                event_slug: booking.event_slug || booking.slug,
+                                            }),
+                                        });
+
+                                        localStorage.removeItem('MAXSHOWBooking');
+                                        showToast('🎉 Payment successful! Tickets booked.');
+                                        setTimeout(() => {
+                                            window.location.href = 'dashboard.html';
+                                        }, 800);
+                                    } catch (verifyErr) {
+                                        errorBox.textContent = verifyErr.message || 'Payment verification failed.';
+                                        errorBox.classList.remove('hidden');
+                                        confirmBtn.disabled = false;
+                                        confirmBtnText.textContent = defaultButtonText;
+                                    }
+                                },
+                            };
+
+                            const rzp = new Razorpay(options);
+                            rzp.on('payment.failed', function (resp) {
+                                errorBox.textContent = resp.error?.description || 'Payment failed. Please try again.';
+                                errorBox.classList.remove('hidden');
+                                confirmBtn.disabled = false;
+                                confirmBtnText.textContent = defaultButtonText;
+                            });
+
+                            confirmBtnText.textContent = 'Awaiting payment...';
+                            rzp.open();
+
+                        } catch (err) {
+                            errorBox.textContent = err.message || 'Failed to initiate checkout. Please try again.';
+                            errorBox.classList.remove('hidden');
+                            confirmBtn.disabled = false;
+                            confirmBtnText.textContent = defaultButtonText;
+                        }
+                    });
+                    return;
+                }
+            } catch (_) {
+                // Not authenticated -> Keep Guest View
+            }
+
+            // Guest Form Handler
+            document.getElementById('booking-form')?.addEventListener('submit', (e) => {
+                e.preventDefault();
+                window.location.href = 'user.html';
+            });
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+

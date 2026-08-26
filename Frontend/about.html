@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>About MAXSHOW</title><script src="https://cdn.tailwindcss.com"></script><script>tailwind.config={darkMode:'class',theme:{extend:{colors:{ink:'#17202A',coral:'#F2634E',cream:'#FFF9F2'}}}}</script>    <link rel="stylesheet" href="theme.css?v=2">
+    <script src="theme.js" defer></script>
+    <script src="common.js" defer></script>
+</head>
+<body class="min-h-screen bg-cream text-ink antialiased dark:bg-[#101820] dark:text-white">
+    <header class="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
+        <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <a href="index.html" class="flex items-center gap-2.5">
+                <span class="grid h-10 w-10 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-sm shadow-coral/30">M</span>
+                <span class="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+            </a>
+            <div class="flex items-center gap-2 sm:gap-3 pr-10 sm:pr-0">
+                <a href="index.html#discover" class="rounded-full bg-ink px-4 py-2 text-xs sm:text-sm font-bold text-white transition hover:bg-coral dark:bg-[#283747]">Browse events</a>
+                <span id="account-action"></span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="mx-auto max-w-5xl px-4 sm:px-6 py-12 text-center sm:py-16 lg:py-24">
+            <p class="text-xs sm:text-sm font-bold uppercase tracking-[.16em] text-coral">About MAXSHOW</p>
+            <h1 class="mx-auto mt-3 sm:mt-4 max-w-3xl text-3xl sm:text-5xl lg:text-6xl font-black leading-tight tracking-tight text-ink dark:text-white">We make local plans easier to find.</h1>
+            <p class="mx-auto mt-4 sm:mt-6 max-w-2xl text-base sm:text-lg leading-7 sm:leading-8 text-slate-600 dark:text-slate-300">MAXSHOW is a home for the small, joyful things happening around you—from live music and workshops to a new dinner table worth joining.</p>
+        </section>
+
+        <section class="bg-ink py-12 sm:py-16 text-white dark:bg-[#0b1118]">
+            <div class="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 grid-cols-1 sm:grid-cols-3 lg:px-8">
+                <div class="rounded-2xl bg-white/5 p-6 border border-white/10 sm:bg-transparent sm:border-0 sm:p-0">
+                    <p class="text-3xl sm:text-4xl font-black text-[#F6BC58]">7</p>
+                    <p class="mt-2 text-base font-bold">Local areas covered</p>
+                    <p class="mt-1 text-xs sm:text-sm text-white/65">From Pimpri to Aundh</p>
+                </div>
+                <div class="rounded-2xl bg-white/5 p-6 border border-white/10 sm:bg-transparent sm:border-0 sm:p-0">
+                    <p class="text-3xl sm:text-4xl font-black text-[#F6BC58]">4</p>
+                    <p class="mt-2 text-base font-bold">Ways to explore</p>
+                    <p class="mt-1 text-xs sm:text-sm text-white/65">Music, comedy, workshops, outdoors</p>
+                </div>
+                <div class="rounded-2xl bg-white/5 p-6 border border-white/10 sm:bg-transparent sm:border-0 sm:p-0">
+                    <p class="text-3xl sm:text-4xl font-black text-[#F6BC58]">1</p>
+                    <p class="mt-2 text-base font-bold">Simple place to plan</p>
+                    <p class="mt-1 text-xs sm:text-sm text-white/65">Find it, save it, go</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mx-auto max-w-7xl px-4 sm:px-6 py-12 sm:py-16 lg:px-8">
+            <div class="grid gap-8 lg:grid-cols-2 lg:gap-12">
+                <div>
+                    <p class="text-xs sm:text-sm font-bold uppercase tracking-[.16em] text-coral">How it works</p>
+                    <h2 class="mt-2 sm:mt-3 text-2xl sm:text-3xl font-black text-ink dark:text-white">Less searching. More doing.</h2>
+                    <ol class="mt-6 sm:mt-7 space-y-4 sm:space-y-5">
+                        <li class="flex gap-4">
+                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#F9D9B7] font-black text-ink">1</span>
+                            <div>
+                                <p class="font-black text-ink dark:text-white">Explore nearby events</p>
+                                <p class="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Filter by your mood, budget, or the kind of day you want.</p>
+                            </div>
+                        </li>
+                        <li class="flex gap-4">
+                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#D2E8E3] font-black text-ink">2</span>
+                            <div>
+                                <p class="font-black text-ink dark:text-white">Choose your tickets</p>
+                                <p class="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Open the event page and select exactly how many spots you need.</p>
+                            </div>
+                        </li>
+                        <li class="flex gap-4">
+                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#E7DBF3] font-black text-ink">3</span>
+                            <div>
+                                <p class="font-black text-ink dark:text-white">Make the plan happen</p>
+                                <p class="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Sign in to save your booking and keep your plans in one place.</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+                <div class="rounded-2xl sm:rounded-[2rem] bg-[#F9D9B7] p-6 sm:p-8 text-ink shadow-sm">
+                    <h2 class="text-2xl sm:text-3xl font-black">Have an event to share?</h2>
+                    <p class="mt-3 sm:mt-4 text-sm sm:text-base leading-7 text-slate-700">We’re building a home for local organisers too. Use the organiser portal to manage listings and connect with people nearby.</p>
+                    <a href="admin.html" class="mt-6 sm:mt-7 inline-block rounded-2xl bg-ink px-5 py-3.5 text-xs sm:text-sm font-bold text-white shadow-md transition hover:bg-slate-800">Go to organiser portal →</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-stone-200 bg-white dark:border-slate-800 dark:bg-[#1c2733]">
+        <div class="mx-auto flex max-w-7xl flex-col justify-between gap-4 px-4 sm:px-6 py-8 text-xs sm:text-sm font-semibold sm:flex-row lg:px-8">
+            <span class="text-slate-500 dark:text-slate-400">© 2026 MAXSHOW</span>
+            <div class="flex gap-5 text-slate-600 dark:text-slate-300">
+                <a class="hover:text-coral" href="index.html">Home</a>
+                <a class="hover:text-coral" href="index.html#discover">All events</a>
+                <a class="hover:text-coral" href="registration.html">Create account</a>
+            </div>
+        </div>
+    </footer>
+</body>
+
+

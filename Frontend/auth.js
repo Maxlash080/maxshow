@@ -233,15 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (data.smtp_sent) {
                             otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Verification code sent to ${escapeHtml(emailVal)}. Check your Gmail inbox!</span>`;
                         } else {
-                            otpStatusMsg.innerHTML = `
-                                <div class="mt-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs">
-                                    <p class="font-bold">⚠️ Gmail Note: Google rejected login password (requires 16-char Google App Password).</p>
-                                    <p class="mt-1 font-mono font-bold text-sm text-coral">Your generated OTP code: <span class="bg-coral/10 dark:bg-coral/20 px-2 py-0.5 rounded text-base">${escapeHtml(data.dev_otp || '')}</span></p>
-                                </div>
-                            `;
-                            if (otpInput && data.dev_otp) {
-                                otpInput.value = data.dev_otp;
-                            }
+                            otpStatusMsg.innerHTML = `<span class="text-red-500 dark:text-red-400 text-xs font-semibold">⚠️ Could not send email. Make sure SMTP_USER and SMTP_PASSWORD in Render are from the same Gmail account.</span>`;
                         }
                     }
                     if (otpInput) otpInput.focus();

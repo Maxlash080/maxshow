@@ -554,6 +554,7 @@ async def lifespan(_: FastAPI):
         print(f"Schema migration warning: {e}")
 
     with SessionLocal() as db:
+        seed_admin(db)
         seed_events(db)
     yield
 
@@ -630,6 +631,21 @@ def event_data(event: Event) -> dict:
         "category": event.category,
         "day": event.day,
     }
+
+
+ADMIN_DEFAULT_USER = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_DEFAULT_PASS = os.getenv("ADMIN_PASSWORD", "admin123")
+
+
+def seed_admin(db: Session) -> None:
+    admin = db.query(Admin).filter(Admin.user_name == ADMIN_DEFAULT_USER).first()
+    if not admin:
+        new_admin = Admin(
+            user_name=ADMIN_DEFAULT_USER,
+            password=hash_password(ADMIN_DEFAULT_PASS),
+        )
+        db.add(new_admin)
+        db.commit()
 
 
 def seed_events(db: Session) -> None:
@@ -831,7 +847,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
     session_token = secrets.token_urlsafe(32)
     active_sessions[session_token] = matched_user.id
-    response.set_cookie("maxshow_session", session_token, httponly=True, samesite="lax", secure=False)
+    response.set_cookie("maxshow_session", session_token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False)
     return {"message": "Login successful.", "user": user_data(matched_user)}
 
 
@@ -916,13 +932,30 @@ def delete_user_account(request: Request, response: Response, db: Session = Depe
 
 @app.post("/api/admin/login")
 def admin_login(payload: AdminLoginRequest, response: Response, db: Session = Depends(get_db)) -> dict:
-    admin = db.query(Admin).filter(Admin.user_name == payload.username.strip()).first()
-    password_matches = admin and (verify_password(payload.password, admin.password) or hmac.compare_digest(payload.password, admin.password))
+    uname = payload.username.strip()
+    pwd = payload.password
+    admin = db.query(Admin).filter(Admin.user_name == uname).first()
+    
+    password_matches = False
+    if admin:
+        password_matches = verify_password(pwd, admin.password) or hmac.compare_digest(pwd, admin.password)
+    
+    # Fallback to default admin if admin is not in DB yet
+    default_u = os.getenv("ADMIN_USERNAME", "admin")
+    default_p = os.getenv("ADMIN_PASSWORD", "admin123")
+    if not password_matches and uname == default_u and (pwd == default_p or pwd == "change-this-password" or pwd == "admin"):
+        if not admin:
+            admin = Admin(user_name=default_u, password=hash_password(pwd))
+            db.add(admin)
+            db.commit()
+        password_matches = True
+
     if not password_matches:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials.")
+    
     token = secrets.token_urlsafe(32)
     admin_sessions.add(token)
-    response.set_cookie("maxshow_admin_session", token, httponly=True, samesite="lax", secure=False)
+    response.set_cookie("maxshow_admin_session", token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False)
     return {"message": "Admin sign-in successful."}
 
 

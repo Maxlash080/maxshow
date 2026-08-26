@@ -35,9 +35,7 @@ BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR.parent / "Frontend"
 load_dotenv(BASE_DIR / ".env")
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is missing. Create Backend/.env from .env.example.")
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{BASE_DIR / 'maxshow.db'}"
 
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_TTFGH3rlszmUAE")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "TvZQuF9gPM43IuSnxt7UFkk3")
@@ -104,7 +102,8 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
         print(f"[OTP EMAIL LOG] SMTP note ({type(e).__name__}: {e}). Generated OTP for {to_email}: {otp_code}")
         return False
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

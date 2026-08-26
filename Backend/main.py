@@ -82,30 +82,43 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
 
     text_body = f"Your MAXSHOW verification code is: {otp_code}. It will expire in 5 minutes."
 
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "official.maxshow@gmail.com").strip()
+    smtp_pwd = os.getenv("SMTP_PASSWORD", "cbnbbcisclsagrfi").replace(" ", "").strip()
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_USER}>"
+    msg["From"] = f"{SMTP_FROM_NAME} <{smtp_user}>"
     msg["To"] = to_email
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-    smtp_host = os.getenv("SMTP_HOST", SMTP_HOST).strip()
-    smtp_port = int(os.getenv("SMTP_PORT", SMTP_PORT))
-    smtp_user = os.getenv("SMTP_USER", SMTP_USER).strip()
-    smtp_pwd = os.getenv("SMTP_PASSWORD", SMTP_PASSWORD).replace(" ", "").strip()
-
+    # Try 1: Port 587 with STARTTLS
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=8) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(smtp_user, smtp_pwd)
             server.sendmail(smtp_user, [to_email], msg.as_string())
-        print(f"[OTP EMAIL SENT] Successfully sent OTP {otp_code} to {to_email}")
+        print(f"[OTP EMAIL SENT (587)] Successfully sent OTP {otp_code} to {to_email}")
         return True
-    except Exception as e:
-        print(f"[OTP EMAIL LOG] SMTP note ({type(e).__name__}: {e}). Generated OTP for {to_email}: {otp_code}")
-        return False
+    except Exception as e1:
+        print(f"[OTP EMAIL 587 FAILED] ({type(e1).__name__}: {e1}). Trying SSL port 465...")
+
+    # Try 2: Port 465 with direct SSL
+    try:
+        with smtplib.SMTP_SSL(smtp_host, 465, timeout=8) as server:
+            server.ehlo()
+            server.login(smtp_user, smtp_pwd)
+            server.sendmail(smtp_user, [to_email], msg.as_string())
+        print(f"[OTP EMAIL SENT (465)] Successfully sent OTP {otp_code} to {to_email}")
+        return True
+    except Exception as e2:
+        print(f"[OTP EMAIL 465 FAILED] ({type(e2).__name__}: {e2}). Generated OTP for {to_email}: {otp_code}")
+
+    return False
 
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)

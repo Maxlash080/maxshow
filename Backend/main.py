@@ -89,13 +89,18 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
+    smtp_host = os.getenv("SMTP_HOST", SMTP_HOST).strip()
+    smtp_port = int(os.getenv("SMTP_PORT", SMTP_PORT))
+    smtp_user = os.getenv("SMTP_USER", SMTP_USER).strip()
+    smtp_pwd = os.getenv("SMTP_PASSWORD", SMTP_PASSWORD).replace(" ", "").strip()
+
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, [to_email], msg.as_string())
+            server.login(smtp_user, smtp_pwd)
+            server.sendmail(smtp_user, [to_email], msg.as_string())
         print(f"[OTP EMAIL SENT] Successfully sent OTP {otp_code} to {to_email}")
         return True
     except Exception as e:

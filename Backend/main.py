@@ -721,20 +721,24 @@ def send_otp(payload: SendOtpRequest, db: Session = Depends(get_db)) -> dict:
 
     # Dispatch email via SMTP
     sent = send_otp_email(clean_email, otp)
-    
+    if not sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email. Please check your email address and try again.",
+        )
+
     otp_cache[clean_email] = {
         "otp": otp,
         "expires_at": expires_at,
-        "verified": not sent, # Auto-verify if cloud host blocks outbound SMTP so users are never blocked!
+        "verified": False,
     }
 
-    print(f"[OTP LOG] Verification OTP for {clean_email}: {otp} (SMTP Sent: {sent})")
+    print(f"[OTP LOG] Verification OTP for {clean_email}: {otp} (Sent via official.maxshow@gmail.com)")
 
     return {
-        "message": f"Verification code sent to {clean_email}." if sent else "Email verified successfully.",
+        "message": f"Verification code sent to {clean_email}.",
         "email": clean_email,
-        "smtp_sent": sent,
-        "auto_verified": not sent,
+        "smtp_sent": True,
     }
 
 
@@ -745,13 +749,10 @@ def verify_otp(payload: VerifyOtpRequest) -> dict:
 
     record = otp_cache.get(clean_email)
     if not record:
-        record = {
-            "otp": user_otp,
-            "expires_at": time.time() + (5 * 60),
-            "verified": True,
-        }
-        otp_cache[clean_email] = record
-        return {"message": "Email verified successfully!"}
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active verification code found for this email. Please click 'Send OTP' first.",
+        )
 
     if time.time() > record.get("expires_at", 0):
         otp_cache.pop(clean_email, None)
@@ -760,7 +761,7 @@ def verify_otp(payload: VerifyOtpRequest) -> dict:
             detail="Verification code has expired. Please request a new code.",
         )
 
-    if record.get("verified") is not True and record.get("otp") != user_otp and user_otp != "VERIFIED" and user_otp != "123456":
+    if record.get("otp") != user_otp:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid verification code. Please check your Gmail or request a new code.",

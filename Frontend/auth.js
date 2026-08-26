@@ -230,18 +230,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     if (otpStatusMsg) {
-                        if (data.smtp_sent) {
-                            otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Verification code sent to ${escapeHtml(emailVal)}. Check your Gmail inbox!</span>`;
-                            if (otpInput) otpInput.focus();
-                        } else {
-                            otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Email verified! Please enter your details below to create your account.</span>`;
-                            if (otpInput) otpInput.value = '123456';
-                            if (verifyOtpBtn) {
-                                verifyOtpBtn.disabled = true;
-                                verifyOtpBtn.className = 'rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-bold text-white shadow-sm transition';
-                                verifyOtpBtn.textContent = 'Verified ✓';
-                            }
-                        }
+                        otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ 6-digit verification code sent to ${escapeHtml(emailVal)}. Check your Gmail inbox!</span>`;
+                    }
+                    if (otpInput) {
+                        otpInput.value = '';
+                        otpInput.focus();
                     }
 
                     // 60-second cooldown timer
@@ -297,17 +290,46 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     isOtpVerified = true;
-                    setFieldSuccess(otpInput, '✓ Email verified successfully!');
-                    if (otpStatusMsg) {
-                        otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Email verified! You can now create your account.</span>`;
+
+                    // Lock OTP Input completely
+                    otpInput.readOnly = true;
+                    otpInput.setAttribute('readonly', 'true');
+                    otpInput.classList.add('!bg-emerald-50', 'dark:!bg-emerald-950/40', '!border-emerald-500', '!text-emerald-800', 'dark:!text-emerald-200', 'cursor-not-allowed');
+                    otpInput.classList.remove('focus:ring-coral/20', 'focus:border-coral', '!border-red-500');
+
+                    // Lock Email Input completely so email cannot be modified after verification
+                    emailInput.readOnly = true;
+                    emailInput.setAttribute('readonly', 'true');
+                    emailInput.classList.add('!bg-slate-100', 'dark:!bg-slate-800/60', 'cursor-not-allowed');
+
+                    // Disable buttons and timers
+                    if (sendOtpBtn) {
+                        sendOtpBtn.disabled = true;
+                        sendOtpBtn.textContent = 'Verified ✓';
+                        sendOtpBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                        clearInterval(otpCooldownTimer);
                     }
-                    verifyOtpBtn.classList.add('bg-emerald-600', 'text-white');
+                    verifyOtpBtn.disabled = true;
+                    verifyOtpBtn.className = 'rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-bold text-white shadow-sm cursor-not-allowed transition';
                     verifyOtpBtn.textContent = '✓ Verified';
+
+                    setFieldSuccess(otpInput, '✓ Email verified & locked');
+                    if (otpStatusMsg) {
+                        otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Email verified! Please enter your mobile number and password below to finish.</span>`;
+                    }
                 } catch (err) {
                     isOtpVerified = false;
                     setFieldError(otpInput, err.message);
                     verifyOtpBtn.disabled = false;
                     verifyOtpBtn.textContent = 'Verify OTP';
+                }
+            });
+
+            // Prevent any edits or key events to OTP input once verified
+            otpInput.addEventListener('keydown', (e) => {
+                if (isOtpVerified) {
+                    e.preventDefault();
+                    return false;
                 }
             });
         }

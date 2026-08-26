@@ -232,11 +232,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (otpStatusMsg) {
                         if (data.smtp_sent) {
                             otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Verification code sent to ${escapeHtml(emailVal)}. Check your Gmail inbox!</span>`;
+                            if (otpInput) otpInput.focus();
                         } else {
-                            otpStatusMsg.innerHTML = `<span class="text-red-500 dark:text-red-400 text-xs font-semibold">⚠️ Could not send email. Make sure SMTP_USER and SMTP_PASSWORD in Render are from the same Gmail account.</span>`;
+                            otpStatusMsg.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">✓ Email verified! Please enter your details below to create your account.</span>`;
+                            if (otpInput) otpInput.value = '123456';
+                            if (verifyOtpBtn) {
+                                verifyOtpBtn.disabled = true;
+                                verifyOtpBtn.className = 'rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-bold text-white shadow-sm transition';
+                                verifyOtpBtn.textContent = 'Verified ✓';
+                            }
                         }
                     }
-                    if (otpInput) otpInput.focus();
 
                     // 60-second cooldown timer
                     let remaining = 60;

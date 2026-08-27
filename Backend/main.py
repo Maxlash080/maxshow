@@ -506,6 +506,16 @@ class CreatePaymentOrderRequest(BaseModel):
     event_slug: str | None = None
 
 
+class BookingRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=160)
+    location: str = Field(min_length=2, max_length=160)
+    time: str = Field(min_length=2, max_length=100)
+    price: int = Field(ge=0)
+    quantity: int = Field(ge=1, le=20)
+    event_id: int | None = None
+    event_slug: str | None = None
+
+
 class VerifyPaymentRequest(BaseModel):
     razorpay_order_id: str = Field(min_length=1)
     razorpay_payment_id: str = Field(min_length=1)

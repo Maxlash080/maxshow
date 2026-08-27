@@ -134,6 +134,16 @@ export const UserDashboard = () => {
   };
 
   const handleLogout = async () => {
+    const confirmed = await showConfirmModal({
+      title: 'Log Out of MAXSHOW?',
+      message: 'Are you sure you want to sign out of your account?',
+      icon: '🚪',
+      confirmText: 'Log Out',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
     await logout();
     navigate('/');
   };

@@ -569,8 +569,18 @@ export const AdminDashboard = () => {
     }
   };
 
-  // Admin Sign Out (Direct without confirmation)
+  // Admin Sign Out with confirmation
   const handleAdminSignOut = async () => {
+    const confirmed = await showConfirmModal({
+      title: 'Sign Out of Admin Centre?',
+      message: 'Are you sure you want to sign out from the Admin Control Centre?',
+      icon: '🚪',
+      confirmText: 'Sign Out',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       await apiRequest('/api/admin/logout', { method: 'POST' });
     } catch (_) {}

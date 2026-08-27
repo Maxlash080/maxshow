@@ -45,42 +45,24 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
           )}
 
           {isAuthenticated ? (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/dashboard"
-                className="flex items-center gap-2 rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
-                title="Open your profile dashboard"
-                aria-label={`Open ${user?.name || 'User'}'s profile dashboard`}
-              >
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[11px] font-black text-white">
-                  {initial}
-                </span>
-                <span>Profile</span>
-              </Link>
-              <button
-                onClick={logout}
-                className="rounded-full border border-stone-300 bg-white px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-red-600 transition hover:border-red-400 hover:bg-red-50 dark:border-slate-700 dark:bg-[#1c2733] dark:hover:bg-red-950/40"
-                type="button"
-              >
-                Log out
-              </button>
-            </div>
+            <Link
+              to="/dashboard"
+              className="flex items-center gap-2 rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
+              title="Open your profile dashboard"
+              aria-label={`Open ${user?.name || 'User'}'s profile dashboard`}
+            >
+              <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[11px] font-black text-white">
+                {initial}
+              </span>
+              <span>Profile</span>
+            </Link>
           ) : isAdmin ? (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/admin-dashboard"
-                className="rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
-              >
-                Admin Centre
-              </Link>
-              <button
-                onClick={logout}
-                className="rounded-full border border-stone-300 bg-white px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-red-600 transition hover:border-red-400 hover:bg-red-50 dark:border-slate-700 dark:bg-[#1c2733] dark:hover:bg-red-950/40"
-                type="button"
-              >
-                Log out
-              </button>
-            </div>
+            <Link
+              to="/admin-dashboard"
+              className="rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
+            >
+              Admin Centre
+            </Link>
           ) : (
             <Link
               to="/user"

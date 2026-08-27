@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -16,11 +17,11 @@ from typing import Generator
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine, func, inspect, or_, text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
@@ -175,6 +176,14 @@ def generate_booking_custom_id(user_custom_id: str, event_custom_id: str, suffix
     return f"{u_part}-{e_part}-{sfx}"
 
 
+def generate_bookmark_custom_id(user_custom_id: str, event_custom_id: str, suffix: str = "") -> str:
+    """Format: BMK-User ID first 5 characters + Event ID first 5 characters (+ suffix)."""
+    u_part = (user_custom_id or "USERX")[:5].upper().ljust(5, "X")
+    e_part = (event_custom_id or "EVENT")[:5].upper().ljust(5, "X")
+    sfx = suffix or secrets.token_hex(2).upper()
+    return f"BMK-{u_part}-{e_part}-{sfx}"
+
+
 def generate_user_username(full_name: str, phone_number: str = "") -> str:
     """Generates a default alphanumeric username for existing users."""
     base = re.sub(r"[^a-zA-Z0-9_]", "", full_name.lower().replace(" ", "_")).strip("_")
@@ -196,11 +205,13 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(60), unique=True, index=True, nullable=True)
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(150), unique=False, nullable=False, index=True)
-    phone_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    phone_number: Mapped[str] = mapped_column(String(20), unique=False, nullable=False, index=True)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     bookings: Mapped[list["Booking"]] = relationship("Booking", back_populates="user", cascade="all, delete-orphan")
+    bookmarks: Mapped[list["Bookmark"]] = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
+    ratings: Mapped[list["Rating"]] = relationship("Rating", back_populates="user", cascade="all, delete-orphan")
 
 
 class Admin(Base):
@@ -228,9 +239,13 @@ class Event(Base):
     description: Mapped[Text] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     day: Mapped[str] = mapped_column(String(20), nullable=False, default="weekend")
+    rating: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+    rating_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     bookings: Mapped[list["Booking"]] = relationship("Booking", back_populates="event")
+    bookmarks: Mapped[list["Bookmark"]] = relationship("Bookmark", back_populates="event", cascade="all, delete-orphan")
+    ratings: Mapped[list["Rating"]] = relationship("Rating", back_populates="event", cascade="all, delete-orphan")
 
 
 class Booking(Base):
@@ -251,6 +266,34 @@ class Booking(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="bookings")
     event: Mapped["Event | None"] = relationship("Event", back_populates="bookings")
+
+
+class Bookmark(Base):
+    __tablename__ = "bookmarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    custom_id: Mapped[str | None] = mapped_column(String(60), unique=True, index=True, nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    user: Mapped["User"] = relationship("User", back_populates="bookmarks")
+    event: Mapped["Event"] = relationship("Event", back_populates="bookmarks")
+
+
+class Rating(Base):
+    __tablename__ = "ratings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    review: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user: Mapped["User"] = relationship("User", back_populates="ratings")
+    event: Mapped["Event"] = relationship("Event", back_populates="ratings")
 
 
 class SendOtpRequest(BaseModel):
@@ -290,8 +333,11 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     username: str = Field(min_length=3, max_length=30)
     email: str = Field(min_length=3, max_length=150)
-    mobile: str = Field(min_length=10, max_length=15)
-    password: str = Field(min_length=6, max_length=128)
+    mobile: str | None = Field(default=None)
+    phone: str | None = Field(default=None)
+    phone_number: str | None = Field(default=None)
+    password: str = Field(min_length=1, max_length=128)
+    confirm_password: str | None = Field(default=None)
     otp: str = Field(default="", max_length=10)
 
     @field_validator("full_name")
@@ -318,15 +364,18 @@ class RegisterRequest(BaseModel):
             raise ValueError("Username can only contain letters, numbers, and underscores (_) with no spaces or special symbols.")
         return clean
 
-    @field_validator("mobile")
+    @field_validator("mobile", "phone", "phone_number")
     @classmethod
-    def validate_mobile(cls, v: str) -> str:
+    def validate_mobile(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         clean = v.strip()
-        if not clean.isdigit():
-            raise ValueError("Mobile number must contain numbers only (letters are not allowed).")
-        if len(clean) != 10:
+        if not clean:
+            return None
+        clean_digits = re.sub(r"\D", "", clean)
+        if clean_digits and len(clean_digits) != 10:
             raise ValueError("Mobile number must be a valid 10-digit number.")
-        return clean
+        return clean_digits or None
 
     @field_validator("email")
     @classmethod
@@ -335,6 +384,21 @@ class RegisterRequest(BaseModel):
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
             raise ValueError("Please enter a valid email address.")
         return clean
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter (A-Z).")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter (a-z).")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("Password must contain at least one number (0-9).")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\\/~`]", v):
+            raise ValueError("Password must contain at least one special character (!@#$%^&*).")
+        return v
 
 
 class UpdateProfileRequest(BaseModel):
@@ -413,7 +477,7 @@ class AdminLoginRequest(BaseModel):
 
 
 class ImageUploadRequest(BaseModel):
-    filename: str = Field(min_length=1, max_length=255)
+    filename: str | None = Field(default=None, max_length=255)
     content_type: str = Field(min_length=1, max_length=50)
     data: str = Field(min_length=1)
 
@@ -455,6 +519,60 @@ class VerifyPaymentRequest(BaseModel):
     event_slug: str | None = None
 
 
+class BookmarkToggleRequest(BaseModel):
+    event_id: int | None = None
+    event_slug: str | None = None
+
+
+class RateEventRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    review: str | None = Field(default=None, max_length=1000)
+
+
+DEFAULT_RATINGS: dict[str, tuple[float, int]] = {
+    "moonlight-picnic": (4.9, 28),
+    "blue-room": (4.8, 34),
+    "comedy-room": (4.7, 19),
+    "watercolour": (4.9, 15),
+    "rooftop-cinema": (4.8, 42),
+    "brunch-social": (4.7, 23),
+    "sunrise-run": (5.0, 18),
+}
+
+
+def resolve_event_by_identifier(identifier: str | int | None, db: Session) -> Event | None:
+    if identifier is None:
+        return None
+    raw = str(identifier).strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        ev = db.get(Event, int(raw))
+        if ev:
+            return ev
+    ev = db.query(Event).filter(Event.slug == raw.lower()).first()
+    if ev:
+        return ev
+    ev = db.query(Event).filter(Event.custom_id == raw).first()
+    if ev:
+        return ev
+    return None
+
+
+def recalculate_event_rating(event: Event, db: Session) -> None:
+    all_ratings = db.query(Rating.rating).filter(Rating.event_id == event.id).all()
+    if all_ratings:
+        avg_r = sum(r[0] for r in all_ratings) / len(all_ratings)
+        event.rating = round(float(avg_r), 1)
+        event.rating_count = len(all_ratings)
+    else:
+        seed_r, seed_cnt = DEFAULT_RATINGS.get(event.slug, (4.8, 12))
+        event.rating = seed_r
+        event.rating_count = seed_cnt
+    db.commit()
+    db.refresh(event)
+
+
 def resolve_event(db: Session, event_id: int | None, event_slug: str | None, title: str) -> Event | None:
     if event_id:
         ev = db.get(Event, event_id)
@@ -494,11 +612,26 @@ async def lifespan(_: FastAPI):
                 if "username" not in u_cols:
                     conn.execute(text("ALTER TABLE users ADD COLUMN username VARCHAR(60) NULL"))
                     conn.commit()
+                # Drop unique index on phone_number if present to allow unlimited registrations with same phone number
+                try:
+                    idx_rows = conn.execute(text("SHOW INDEX FROM users WHERE Column_name = 'phone_number' AND Non_unique = 0")).fetchall()
+                    for r in idx_rows:
+                        key_name = r[2]
+                        conn.execute(text(f"ALTER TABLE users DROP INDEX `{key_name}`"))
+                        conn.commit()
+                except Exception:
+                    pass
 
             if "events" in tables:
                 e_cols = {c["name"] for c in insp.get_columns("events")}
                 if "custom_id" not in e_cols:
                     conn.execute(text("ALTER TABLE events ADD COLUMN custom_id VARCHAR(50) NULL"))
+                    conn.commit()
+                if "rating" not in e_cols:
+                    conn.execute(text("ALTER TABLE events ADD COLUMN rating FLOAT DEFAULT 0.0"))
+                    conn.commit()
+                if "rating_count" not in e_cols:
+                    conn.execute(text("ALTER TABLE events ADD COLUMN rating_count INT DEFAULT 0"))
                     conn.commit()
 
             if "bookings" in tables:
@@ -536,10 +669,30 @@ async def lifespan(_: FastAPI):
 
             events_list = db.query(Event).all()
             event_title_map = {}
+            default_ratings = {
+                "moonlight-picnic": (4.9, 28),
+                "blue-room": (4.8, 34),
+                "comedy-room": (4.7, 19),
+                "watercolour": (4.9, 15),
+                "rooftop-cinema": (4.8, 42),
+                "brunch-social": (4.7, 23),
+                "sunrise-run": (5.0, 18),
+            }
             for e in events_list:
                 if not e.custom_id:
                     e.custom_id = generate_event_custom_id(e.title, e.time)
                 event_title_map[e.title.lower().strip()] = e
+
+                # Ensure realistic initial ratings for events
+                avg_r = db.query(func.avg(Rating.rating)).filter(Rating.event_id == e.id).scalar()
+                r_cnt = db.query(Rating).filter(Rating.event_id == e.id).count()
+                if avg_r is not None and r_cnt > 0:
+                    e.rating = round(float(avg_r), 1)
+                    e.rating_count = r_cnt
+                elif e.rating is None or e.rating == 0.0:
+                    seed_r, seed_cnt = default_ratings.get(e.slug, (4.8, 12))
+                    e.rating = seed_r
+                    e.rating_count = seed_cnt
 
             db.commit()
 
@@ -573,6 +726,7 @@ async def lifespan(_: FastAPI):
 
     with SessionLocal() as db:
         seed_admin(db)
+        seed_test_account(db)
         seed_events(db)
     yield
 
@@ -588,7 +742,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         msg = msg[len("Value error, "):]
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": msg, "errors": errors},
+        content={"detail": msg},
     )
 
 app.add_middleware(
@@ -601,6 +755,40 @@ app.add_middleware(
 
 active_sessions: dict[str, int] = {}
 admin_sessions: set[str] = set()
+
+
+class AdminNotificationBroker:
+    def __init__(self):
+        self.subscribers: set[asyncio.Queue] = set()
+
+    def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue()
+        self.subscribers.add(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue):
+        self.subscribers.discard(q)
+
+    async def broadcast(self, event_type: str, data: dict):
+        if not self.subscribers:
+            return
+        payload = json.dumps({"type": event_type, "data": data, "timestamp": time.time()})
+        msg = f"event: {event_type}\ndata: {payload}\n\n"
+        for q in list(self.subscribers):
+            try:
+                await q.put(msg)
+            except Exception:
+                self.subscribers.discard(q)
+
+    def broadcast_sync(self, event_type: str, data: dict):
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.broadcast(event_type, data))
+        except RuntimeError:
+            pass
+
+
+admin_broker = AdminNotificationBroker()
 
 
 def user_data(user: User) -> dict:
@@ -634,6 +822,8 @@ def require_admin(request: Request) -> None:
 def event_data(event: Event) -> dict:
     if not event.custom_id:
         event.custom_id = generate_event_custom_id(event.title, event.time)
+    r = float(event.rating) if event.rating is not None and event.rating > 0 else 4.8
+    rc = int(event.rating_count) if event.rating_count is not None and event.rating_count >= 0 else 0
     return {
         "id": event.id,
         "custom_id": event.custom_id,
@@ -648,6 +838,8 @@ def event_data(event: Event) -> dict:
         "description": event.description,
         "category": event.category,
         "day": event.day,
+        "rating": round(r, 1),
+        "rating_count": rc,
     }
 
 
@@ -665,18 +857,39 @@ def seed_admin(db: Session) -> None:
         db.add(new_admin)
         db.commit()
 
+    # Seed test admin
+    test_admin = db.query(Admin).filter(Admin.user_name == "test").first()
+    if not test_admin:
+        db.add(Admin(user_name="test", password=hash_password("test")))
+        db.commit()
+
+
+def seed_test_account(db: Session) -> None:
+    test_user = db.query(User).filter(User.username == "test").first()
+    if not test_user:
+        test_user = User(
+            custom_id="TEST9876",
+            username="test",
+            full_name="Test User",
+            email="test@maxshow.com",
+            phone_number="9876543210",
+            password=hash_password("test"),
+        )
+        db.add(test_user)
+        db.commit()
+
 
 def seed_events(db: Session) -> None:
     if db.query(Event).count():
         return
     events = [
-        ("moonlight-picnic", "Moonlight picnic & vinyl", "Outdoors", "Skyline Terrace · Hinjawadi", "Tonight, 8:00 PM", "Hinjawadi, Pune", 499, "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=85", "An open-air evening under string lights with curated vinyl records, artisan picnic bites, and golden sunset views across Hinjawadi.", "outdoors", "today"),
-        ("blue-room", "Blue room: acoustic night", "Live music", "The Blue Room · Kasarwadi", "Friday, 7:30 PM", "Kasarwadi, Pimpri-Chinchwad", 399, "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85", "Settle into an intimate evening of unplugged originals, soft lights, and a carefully curated local line-up.", "music", "weekend"),
-        ("comedy-room", "After hours: a comedy room", "Comedy", "Laugh Lane · Nigdi", "Saturday, 8:00 PM", "Nigdi, Pimpri-Chinchwad", 299, "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=85", "A relaxed late-night set featuring sharp new comics and seasoned crowd favourites.", "comedy", "weekend"),
-        ("watercolour", "Watercolour in the park", "Creative workshop", "Open Studio · Aundh", "Sunday, 11:00 AM", "Aundh, Pune", 450, "https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=1200&q=85", "A slow Sunday workshop for beginners and curious painters.", "create", "weekend"),
-        ("rooftop-cinema", "Rooftop cinema club", "Film & outdoors", "Skyline Terrace · Hinjawadi", "Sunday, 6:30 PM", "Hinjawadi, Pune", 550, "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=85", "A classic film under an open sky, paired with soft blankets and cinema snacks.", "outdoors", "weekend"),
-        ("brunch-social", "Sunday brunch social", "Food & drinks", "Common Table · Pimpri", "Sunday, 12:30 PM", "Pimpri, Pune", 599, "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=85", "A leisurely afternoon meal designed for good conversation and new connections.", "food", "weekend"),
-        ("sunrise-run", "Community sunrise run", "Move", "Riverside Track · Punawale", "Sunday, 6:00 AM", "Punawale, Pune", 0, "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=1200&q=85", "Start the day with an easy, all-level community run.", "move", "today"),
+        ("moonlight-picnic", "Moonlight picnic & vinyl", "Outdoors", "Skyline Terrace · Hinjawadi", "Tonight, 8:00 PM", "Hinjawadi, Pune", 499, "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=85", "An open-air evening under string lights with curated vinyl records, artisan picnic bites, and golden sunset views across Hinjawadi.", "outdoors", "today", 4.9, 28),
+        ("blue-room", "Blue room: acoustic night", "Live music", "The Blue Room · Kasarwadi", "Friday, 7:30 PM", "Kasarwadi, Pimpri-Chinchwad", 399, "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85", "Settle into an intimate evening of unplugged originals, soft lights, and a carefully curated local line-up.", "music", "weekend", 4.8, 34),
+        ("comedy-room", "After hours: a comedy room", "Comedy", "Laugh Lane · Nigdi", "Saturday, 8:00 PM", "Nigdi, Pimpri-Chinchwad", 299, "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=85", "A relaxed late-night set featuring sharp new comics and seasoned crowd favourites.", "comedy", "weekend", 4.7, 19),
+        ("watercolour", "Watercolour in the park", "Creative workshop", "Open Studio · Aundh", "Sunday, 11:00 AM", "Aundh, Pune", 450, "https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=1200&q=85", "A slow Sunday workshop for beginners and curious painters.", "create", "weekend", 4.9, 15),
+        ("rooftop-cinema", "Rooftop cinema club", "Film & outdoors", "Skyline Terrace · Hinjawadi", "Sunday, 6:30 PM", "Hinjawadi, Pune", 550, "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=85", "A classic film under an open sky, paired with soft blankets and cinema snacks.", "outdoors", "weekend", 4.8, 42),
+        ("brunch-social", "Sunday brunch social", "Food & drinks", "Common Table · Pimpri", "Sunday, 12:30 PM", "Pimpri, Pune", 599, "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=85", "A leisurely afternoon meal designed for good conversation and new connections.", "food", "weekend", 4.7, 23),
+        ("sunrise-run", "Community sunrise run", "Move", "Riverside Track · Punawale", "Sunday, 6:00 AM", "Punawale, Pune", 0, "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=1200&q=85", "Start the day with an easy, all-level community run.", "move", "today", 5.0, 18),
     ]
     db.add_all([
         Event(
@@ -692,8 +905,10 @@ def seed_events(db: Session) -> None:
             description=description,
             category=category,
             day=day,
+            rating=rating,
+            rating_count=rating_count,
         )
-        for slug, title, event_type, venue, time, location, price, image, description, category, day in events
+        for slug, title, event_type, venue, time, location, price, image, description, category, day, rating, rating_count in events
     ])
     db.commit()
 
@@ -772,10 +987,10 @@ def verify_otp(payload: VerifyOtpRequest) -> dict:
 
 
 @app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
+def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)) -> dict:
     clean_username = payload.username.strip().lower()
     clean_email = str(payload.email).strip().lower()
-    clean_mobile = payload.mobile.strip()
+    clean_mobile = (payload.mobile or payload.phone or payload.phone_number or "0000000000").strip()
     user_otp = (payload.otp or "").strip()
 
     # Validate OTP verification
@@ -798,11 +1013,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
             status_code=status.HTTP_409_CONFLICT,
             detail="This username is already taken. Please try something unique.",
         )
-    if db.query(User).filter(User.phone_number == clean_mobile).first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account already exists with this mobile number.",
-        )
 
     cid = generate_user_custom_id(payload.full_name.strip(), clean_mobile)
     existing_cid_count = db.query(User).filter(User.custom_id.like(f"{cid}%")).count()
@@ -822,6 +1032,29 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         db.commit()
         db.refresh(user)
         otp_cache.pop(clean_email, None) # Clear OTP after successful registration
+
+        # Set user session token
+        token = secrets.token_urlsafe(32)
+        active_sessions[token] = user.id
+        response.set_cookie(
+            "maxshow_session",
+            token,
+            httponly=True,
+            samesite="lax",
+            max_age=86400 * 30,
+            secure=False,
+        )
+        
+        # Real-time Broadcast to Admin Portal
+        admin_broker.broadcast_sync("user_registered", {
+            "id": user.id,
+            "user_id": user.custom_id,
+            "username": user.username,
+            "name": user.full_name,
+            "email": user.email,
+            "phone": user.phone_number,
+            "created_at": user.created_at.isoformat() if user.created_at else datetime.now().isoformat(),
+        })
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -845,11 +1078,12 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     identifier = payload.email.strip().lower()
     raw_username = identifier.lstrip('@')
     
-    # Query all users with matching email, username (with/without @), or phone
+    # Query all users with matching email, username (with/without @), custom ID, or phone
     criteria = [
         func.lower(User.email) == identifier,
         func.lower(User.username) == identifier,
         func.lower(User.username) == raw_username,
+        func.lower(User.custom_id) == identifier,
     ]
     if identifier.isdigit() and len(identifier) == 10:
         criteria.append(User.phone_number == identifier)
@@ -904,14 +1138,6 @@ def update_profile(payload: UpdateProfileRequest, request: Request, db: Session 
             detail="This username is already taken. Please try something unique.",
         )
 
-    # Check if mobile is taken by another user
-    existing_mobile = db.query(User).filter(User.phone_number == clean_mobile, User.id != user.id).first()
-    if existing_mobile:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account already exists with this mobile number.",
-        )
-
     user.full_name = clean_name
     user.username = clean_username
     user.email = clean_email
@@ -920,6 +1146,7 @@ def update_profile(payload: UpdateProfileRequest, request: Request, db: Session 
     try:
         db.commit()
         db.refresh(user)
+        admin_broker.broadcast_sync("user_updated", {"user_id": user.id, "name": user.full_name, "username": user.username})
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -936,6 +1163,8 @@ def update_profile(payload: UpdateProfileRequest, request: Request, db: Session 
 @app.delete("/api/auth/delete-account")
 def delete_user_account(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     user = require_user(request, db)
+    user_id = user.id
+    user_name = user.full_name
     
     # Delete user's bookings first
     db.query(Booking).filter(Booking.user_id == user.id).delete()
@@ -943,6 +1172,9 @@ def delete_user_account(request: Request, response: Response, db: Session = Depe
     # Delete the user
     db.delete(user)
     db.commit()
+
+    # Real-time Broadcast
+    admin_broker.broadcast_sync("user_deleted", {"user_id": user_id, "name": user_name})
 
     # Invalidate session
     session_token = request.cookies.get("maxshow_session")
@@ -954,6 +1186,9 @@ def delete_user_account(request: Request, response: Response, db: Session = Depe
 
 
 @app.post("/api/admin/login")
+@app.post("/api/admin/login/")
+@app.post("/api/auth/admin-login")
+@app.post("/api/auth/admin-login/")
 def admin_login(payload: AdminLoginRequest, response: Response, db: Session = Depends(get_db)) -> dict:
     uname = payload.username.strip()
     pwd = payload.password
@@ -983,6 +1218,7 @@ def admin_login(payload: AdminLoginRequest, response: Response, db: Session = De
 
 
 @app.post("/api/admin/logout")
+@app.post("/api/admin/logout/")
 def admin_logout(request: Request, response: Response) -> dict:
     token = request.cookies.get("maxshow_admin_session")
     if token:
@@ -992,9 +1228,43 @@ def admin_logout(request: Request, response: Response) -> dict:
 
 
 @app.get("/api/admin/me")
+@app.get("/api/admin/me/")
 def admin_me(request: Request) -> dict:
     require_admin(request)
     return {"admin": True}
+
+
+@app.get("/api/admin/live-stream")
+async def admin_live_stream(request: Request):
+    require_admin(request)
+    q = admin_broker.subscribe()
+
+    async def event_generator():
+        try:
+            # Send initial connected event
+            yield f"event: connected\ndata: {json.dumps({'message': 'Live admin sync connected', 'time': time.time()})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield msg
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        except (asyncio.CancelledError, GeneratorExit):
+            pass
+        finally:
+            admin_broker.unsubscribe(q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/admin/upload-image")
@@ -1010,7 +1280,7 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The image data is invalid.")
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Images must be 5 MB or smaller.")
-    upload_dir = FRONTEND_DIR / "uploads"
+    upload_dir = BASE_DIR / "uploads"
     upload_dir.mkdir(exist_ok=True)
     filename = f"{uuid4().hex}{extension}"
     (upload_dir / filename).write_bytes(contents)
@@ -1018,20 +1288,43 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
 
 
 @app.get("/api/events")
-def list_events(db: Session = Depends(get_db)) -> dict:
-    return {"events": [event_data(event) for event in db.query(Event).order_by(Event.created_at.desc(), Event.id.desc()).all()]}
+def list_events(request: Request, db: Session = Depends(get_db)) -> dict:
+    session_token = request.cookies.get("maxshow_session")
+    user_id = active_sessions.get(session_token) if session_token else None
+    user_ratings = {}
+    if user_id:
+        user_ratings = {r.event_id: r.rating for r in db.query(Rating).filter(Rating.user_id == user_id).all()}
+
+    events_list = []
+    for event in db.query(Event).order_by(Event.created_at.desc(), Event.id.desc()).all():
+        ed = event_data(event)
+        ed["user_rating"] = user_ratings.get(event.id)
+        events_list.append(ed)
+    return {"events": events_list}
 
 
 @app.get("/api/events/{slug}")
-def get_event(slug: str, db: Session = Depends(get_db)) -> dict:
-    event = db.query(Event).filter(Event.slug == slug).first()
+def get_event(slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    event = resolve_event_by_identifier(slug, db)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
-    return {"event": event_data(event)}
+    data = event_data(event)
+    data["user_rating"] = None
+    data["user_review"] = None
+    session_token = request.cookies.get("maxshow_session")
+    user_id = active_sessions.get(session_token) if session_token else None
+    if user_id:
+        rating_obj = db.query(Rating).filter(Rating.user_id == user_id, Rating.event_id == event.id).first()
+        if rating_obj:
+            data["user_rating"] = rating_obj.rating
+            data["user_review"] = rating_obj.review
+    return {"event": data}
 
 
 @app.get("/api/admin/overview")
 @app.get("/api/admin/overview/")
+@app.get("/api/admin/metrics")
+@app.get("/api/admin/metrics/")
 def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
     users = db.query(User).order_by(User.created_at.desc(), User.id.desc()).all()
@@ -1157,6 +1450,7 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
     try:
         db.commit()
         db.refresh(event)
+        admin_broker.broadcast_sync("events_updated", {"action": "create", "id": event.id, "title": event.title})
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An event with this slug already exists.")
@@ -1175,6 +1469,7 @@ def update_event(event_id: int, payload: EventRequest, request: Request, db: Ses
     try:
         db.commit()
         db.refresh(event)
+        admin_broker.broadcast_sync("events_updated", {"action": "update", "id": event.id, "title": event.title})
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An event with this slug already exists.")
@@ -1187,9 +1482,43 @@ def delete_event(event_id: int, request: Request, db: Session = Depends(get_db))
     event = db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    title = event.title
     db.delete(event)
     db.commit()
+    admin_broker.broadcast_sync("events_updated", {"action": "delete", "id": event_id, "title": title})
     return {"message": "Event deleted."}
+
+
+@app.get("/api/admin/users/{user_id}/bookings")
+@app.get("/api/admin/users/{user_id}/bookings/")
+def get_user_bookings(user_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin(request)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    bookings = db.query(Booking).filter(Booking.user_id == user_id).order_by(Booking.created_at.desc()).all()
+    results = []
+    for b in bookings:
+        ev = b.event or (db.get(Event, b.event_id) if b.event_id else None)
+        is_free = (b.total_amount == 0) or (getattr(b, "payment_status", "") == "Free Entry")
+        results.append({
+            "id": b.id,
+            "booking_id": b.custom_id or f"BKG-{b.id:04d}",
+            "booking_code": b.custom_id or f"BKG-{b.id:04d}",
+            "event_id": b.event_id,
+            "title": b.event_title,
+            "event_title": b.event_title,
+            "location": b.event_location,
+            "time": b.event_time,
+            "tickets": b.ticket_count,
+            "quantity": b.ticket_count,
+            "total": b.total_amount,
+            "payment_status": "Free Entry" if is_free else (getattr(b, "payment_status", None) or "Paid (Razorpay)"),
+            "payment_id": "FREE" if is_free else getattr(b, "payment_id", None),
+            "created_at": b.created_at.isoformat() if b.created_at else "",
+        })
+    return {"bookings": results, "count": len(results)}
 
 
 @app.delete("/api/admin/users/{user_id}")
@@ -1198,9 +1527,11 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)) -
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user_name = user.full_name
     db.query(Booking).filter(Booking.user_id == user_id).delete(synchronize_session=False)
     db.delete(user)
     db.commit()
+    admin_broker.broadcast_sync("user_deleted", {"user_id": user_id, "name": user_name})
     for token, session_user_id in list(active_sessions.items()):
         if session_user_id == user_id:
             active_sessions.pop(token, None)
@@ -1215,6 +1546,7 @@ def delete_booking(booking_id: int, request: Request, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
     db.delete(booking)
     db.commit()
+    admin_broker.broadcast_sync("booking_deleted", {"booking_id": booking_id})
     return {"message": "Booking deleted successfully."}
 
 
@@ -1277,11 +1609,23 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
     db.add(booking)
     db.commit()
     db.refresh(booking)
+    admin_broker.broadcast_sync("booking_created", {
+        "id": booking.id,
+        "booking_id": booking.custom_id or str(booking.id),
+        "user_id": user.id,
+        "user_name": user.full_name,
+        "username": user.username,
+        "event_title": booking.event_title,
+        "tickets": booking.ticket_count,
+        "total": booking.total_amount,
+    })
     return {"message": "Tickets booked successfully.", "booking_id": booking.custom_id or str(booking.id)}
 
 
 @app.post("/api/payment/create-order")
 @app.post("/api/payment/create-order/")
+@app.post("/api/bookings/create-order")
+@app.post("/api/bookings/create-order/")
 def create_payment_order(
     payload: CreatePaymentOrderRequest, request: Request, db: Session = Depends(get_db)
 ) -> dict:
@@ -1310,6 +1654,16 @@ def create_payment_order(
         db.add(booking)
         db.commit()
         db.refresh(booking)
+        admin_broker.broadcast_sync("booking_created", {
+            "id": booking.id,
+            "booking_id": booking.custom_id or str(booking.id),
+            "user_id": user.id,
+            "user_name": user.full_name,
+            "username": user.username,
+            "event_title": booking.event_title,
+            "tickets": booking.ticket_count,
+            "total": 0,
+        })
         return {
             "free": True,
             "message": "Tickets booked successfully.",
@@ -1339,6 +1693,8 @@ def create_payment_order(
 
 @app.post("/api/payment/verify")
 @app.post("/api/payment/verify/")
+@app.post("/api/bookings/verify-payment")
+@app.post("/api/bookings/verify-payment/")
 def verify_payment(
     payload: VerifyPaymentRequest, request: Request, db: Session = Depends(get_db)
 ) -> dict:
@@ -1379,11 +1735,71 @@ def verify_payment(
     db.add(booking)
     db.commit()
     db.refresh(booking)
+    admin_broker.broadcast_sync("booking_created", {
+        "id": booking.id,
+        "booking_id": booking.custom_id or str(booking.id),
+        "user_id": user.id,
+        "user_name": user.full_name,
+        "username": user.username,
+        "event_title": booking.event_title,
+        "tickets": booking.ticket_count,
+        "total": booking.total_amount,
+    })
 
     return {
         "message": "Payment verified and tickets booked successfully.",
         "booking_id": booking.custom_id or str(booking.id),
         "payment_id": payload.razorpay_payment_id,
+    }
+
+
+@app.get("/api/user/dashboard")
+@app.get("/api/user/dashboard/")
+def user_dashboard(request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_user(request, db)
+    bookings = db.query(Booking).filter(Booking.user_id == user.id).order_by(Booking.created_at.desc()).all()
+    bookmarks = db.query(Bookmark).filter(Bookmark.user_id == user.id).order_by(Bookmark.created_at.desc()).all()
+
+    booking_results = []
+    for b in bookings:
+        ev = b.event or (db.get(Event, b.event_id) if b.event_id else None)
+        is_free = (b.total_amount == 0) or (getattr(b, "payment_status", "") == "Free Entry")
+        booking_results.append({
+            "id": b.id,
+            "booking_id": b.custom_id or f"BKG-{b.id:04d}",
+            "booking_code": b.custom_id or f"BKG-{b.id:04d}",
+            "event_id": (ev.custom_id if ev else None) or (f"EVT-{b.event_id}" if b.event_id else "N/A"),
+            "event_slug": ev.slug if ev else None,
+            "event_image": ev.image if ev else "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85",
+            "title": b.event_title,
+            "event_title": b.event_title,
+            "location": b.event_location,
+            "time": b.event_time,
+            "tickets": b.ticket_count,
+            "quantity": b.ticket_count,
+            "total": b.total_amount,
+            "payment_status": "Free Entry" if is_free else (getattr(b, "payment_status", None) or "Paid (Razorpay)"),
+            "payment_id": "FREE" if is_free else getattr(b, "payment_id", None),
+            "created_at": b.created_at.isoformat() if b.created_at else "",
+        })
+
+    bookmark_results = []
+    for bm in bookmarks:
+        if bm.event:
+            bookmark_results.append({
+                "id": bm.id,
+                "bookmark_id": bm.custom_id or f"BMK-{bm.id:04d}",
+                "event_id": bm.event_id,
+                "event": event_data(bm.event),
+                "created_at": bm.created_at.isoformat() if bm.created_at else "",
+            })
+
+    return {
+        "user": user_data(user),
+        "bookings": booking_results,
+        "bookmarks": bookmark_results,
+        "bookings_count": len(booking_results),
+        "bookmarks_count": len(bookmark_results),
     }
 
 
@@ -1414,8 +1830,243 @@ def list_bookings(request: Request, db: Session = Depends(get_db)) -> dict:
     return {"bookings": results}
 
 
-# Keep this last: API routes above it take priority, then the frontend is served at the root.
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+# ==========================================
+# BOOKMARKS & RATINGS API
+# ==========================================
+
+@app.post("/api/bookmarks/toggle")
+@app.post("/api/bookmarks/toggle/")
+def toggle_bookmark(payload: BookmarkToggleRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_user(request, db)
+    event = None
+    if payload.event_id:
+        try:
+            eid = int(payload.event_id)
+            if eid > 0:
+                event = db.get(Event, eid)
+        except (ValueError, TypeError):
+            pass
+    if not event and payload.event_slug:
+        clean_slug = str(payload.event_slug).strip().lower()
+        event = db.query(Event).filter(Event.slug == clean_slug).first()
+    if not event and payload.event_slug:
+        clean_title = str(payload.event_slug).strip()
+        event = db.query(Event).filter(Event.title.ilike(f"%{clean_title}%")).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    existing = db.query(Bookmark).filter(Bookmark.user_id == user.id, Bookmark.event_id == event.id).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return {
+            "bookmarked": False,
+            "message": f"Removed '{event.title}' from bookmarks.",
+            "event_id": event.id,
+        }
+
+    u_cid = user.custom_id or generate_user_custom_id(user.full_name, user.phone_number)
+    e_cid = event.custom_id or generate_event_custom_id(event.title, event.time)
+    b_cid = generate_bookmark_custom_id(u_cid, e_cid)
+
+    new_bmk = Bookmark(
+        custom_id=b_cid,
+        user_id=user.id,
+        event_id=event.id,
+    )
+    db.add(new_bmk)
+    db.commit()
+    db.refresh(new_bmk)
+    return {
+        "bookmarked": True,
+        "bookmark_id": new_bmk.custom_id or f"BMK-{new_bmk.id:04d}",
+        "message": f"Saved '{event.title}' to your bookmarks! 🔖",
+        "event_id": event.id,
+    }
+
+
+@app.get("/api/bookmarks")
+@app.get("/api/bookmarks/")
+def list_bookmarks(request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_user(request, db)
+    bookmarks = (
+        db.query(Bookmark)
+        .filter(Bookmark.user_id == user.id)
+        .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
+        .all()
+    )
+    results = []
+    for b in bookmarks:
+        if b.event:
+            ev_dict = event_data(b.event)
+            results.append({
+                "id": b.id,
+                "bookmark_id": b.custom_id or f"BMK-{b.id:04d}",
+                "event_id": b.event_id,
+                "event": ev_dict,
+                "created_at": b.created_at.isoformat() if b.created_at else "",
+            })
+    return {"bookmarks": results, "count": len(results)}
+
+
+@app.delete("/api/bookmarks/{identifier}")
+@app.delete("/api/bookmarks/{identifier}/")
+def delete_bookmark(identifier: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_user(request, db)
+    event = resolve_event_by_identifier(identifier, db)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    bmk = db.query(Bookmark).filter(Bookmark.user_id == user.id, Bookmark.event_id == event.id).first()
+    if not bmk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found.")
+    db.delete(bmk)
+    db.commit()
+    return {"message": "Bookmark removed.", "event_id": event.id}
+
+
+@app.post("/api/events/{identifier}/rate")
+@app.post("/api/events/{identifier}/rate/")
+def rate_event(identifier: str, payload: RateEventRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_user(request, db)
+    event = resolve_event_by_identifier(identifier, db)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    existing_rating = db.query(Rating).filter(Rating.user_id == user.id, Rating.event_id == event.id).first()
+    already_rated = existing_rating is not None
+
+    if existing_rating:
+        existing_rating.rating = payload.rating
+        if payload.review is not None:
+            existing_rating.review = payload.review
+        existing_rating.updated_at = datetime.now()
+    else:
+        new_rating = Rating(
+            user_id=user.id,
+            event_id=event.id,
+            rating=payload.rating,
+            review=payload.review,
+        )
+        db.add(new_rating)
+
+    db.commit()
+    recalculate_event_rating(event, db)
+
+    msg = f"Your rating was updated to {payload.rating} stars! ⭐" if already_rated else f"Thank you for rating! You gave {payload.rating} stars! ⭐"
+
+    return {
+        "message": msg,
+        "user_rating": payload.rating,
+        "avg_rating": round(float(event.rating or 0.0), 1),
+        "rating_count": int(event.rating_count or 0),
+        "already_rated": already_rated,
+    }
+
+
+@app.delete("/api/events/{identifier}/rate")
+@app.delete("/api/events/{identifier}/rate/")
+@app.post("/api/events/{identifier}/unrate")
+@app.post("/api/events/{identifier}/unrate/")
+def delete_event_rating(identifier: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    user = require_user(request, db)
+    event = resolve_event_by_identifier(identifier, db)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    existing_rating = db.query(Rating).filter(Rating.user_id == user.id, Rating.event_id == event.id).first()
+    if existing_rating:
+        db.delete(existing_rating)
+        db.commit()
+
+    recalculate_event_rating(event, db)
+
+    return {
+        "message": "Rating removed.",
+        "user_rating": None,
+        "avg_rating": round(float(event.rating or 0.0), 1),
+        "rating_count": int(event.rating_count or 0),
+    }
+
+
+@app.get("/api/events/{slug}/my-rating")
+@app.get("/api/events/{slug}/my-rating/")
+def get_my_rating(slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    session_token = request.cookies.get("maxshow_session")
+    user_id = active_sessions.get(session_token) if session_token else None
+    if not user_id:
+        return {"rated": False, "rating": None}
+
+    event = resolve_event_by_identifier(slug, db)
+    if not event:
+        return {"rated": False, "rating": None}
+
+    rating_obj = db.query(Rating).filter(Rating.user_id == user_id, Rating.event_id == event.id).first()
+    if rating_obj:
+        return {
+            "rated": True,
+            "rating": rating_obj.rating,
+            "review": rating_obj.review,
+            "updated_at": rating_obj.updated_at.isoformat() if rating_obj.updated_at else "",
+        }
+    return {"rated": False, "rating": None}
+
+
+@app.get("/api/user/state")
+@app.get("/api/user/state/")
+def get_user_state(request: Request, db: Session = Depends(get_db)) -> dict:
+    session_token = request.cookies.get("maxshow_session")
+    user_id = active_sessions.get(session_token) if session_token else None
+    user = db.get(User, user_id) if user_id else None
+    if not user:
+        return {
+            "authenticated": False,
+            "user": None,
+            "bookmarked_event_ids": [],
+            "user_ratings": {},
+            "user_ratings_by_slug": {},
+        }
+
+    bookmarked_ids = [b[0] for b in db.query(Bookmark.event_id).filter(Bookmark.user_id == user.id).all()]
+    user_ratings_objs = db.query(Rating).filter(Rating.user_id == user.id).all()
+    ratings_by_id = {r.event_id: r.rating for r in user_ratings_objs}
+    
+    event_slug_map = {e.id: e.slug for e in db.query(Event.id, Event.slug).all()}
+    ratings_by_slug = {event_slug_map[r.event_id]: r.rating for r in user_ratings_objs if r.event_id in event_slug_map}
+
+    return {
+        "authenticated": True,
+        "user": user_data(user),
+        "bookmarked_event_ids": bookmarked_ids,
+        "user_ratings": ratings_by_id,
+        "user_ratings_by_slug": ratings_by_slug,
+    }
+
+
+# Static and SPA Routing
+FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
+STATIC_TARGET_DIR = FRONTEND_DIST_DIR if FRONTEND_DIST_DIR.exists() else FRONTEND_DIR
+
+# Mount uploads directory for uploaded event images
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Mount assets directory if it exists in dist
+if (STATIC_TARGET_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=STATIC_TARGET_DIR / "assets"), name="assets")
+
+# SPA catch-all route for client-side routing
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    file_path = STATIC_TARGET_DIR / full_path
+    if full_path and file_path.is_file():
+        return FileResponse(file_path)
+    # If not a physical file, return index.html for React Router to handle
+    index_file = STATIC_TARGET_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return HTMLResponse("<h1>MAXSHOW Frontend Not Found</h1>", status_code=404)
 
 
 if __name__ == "__main__":

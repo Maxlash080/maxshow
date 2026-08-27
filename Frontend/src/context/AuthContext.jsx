@@ -1,0 +1,180 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { apiRequest } from '../utils/api';
+import { useToast } from './ToastContext';
+
+const AuthContext = createContext({
+  user: null,
+  isAuthenticated: false,
+  isAdmin: false,
+  bookmarkedIds: [],
+  userRatings: {},
+  setUserRating: () => {},
+  toggleBookmark: async () => {},
+  refreshAuth: async () => {},
+  logout: async () => {},
+});
+
+const getStoredBookmarks = () => {
+  try {
+    const raw = localStorage.getItem('MAXSHOW_BOOKMARKS');
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+const setStoredBookmarks = (ids) => {
+  try {
+    localStorage.setItem('MAXSHOW_BOOKMARKS', JSON.stringify(ids));
+  } catch (_) {}
+};
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [bookmarkedIds, setBookmarkedIds] = useState(getStoredBookmarks());
+  const [userRatings, setUserRatings] = useState({});
+  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
+
+  const setUserRating = useCallback((eventId, eventSlug, rating) => {
+    setUserRatings((prev) => {
+      const next = { ...prev };
+      if (rating === null || rating === undefined) {
+        if (eventId) delete next[eventId];
+        if (eventSlug) delete next[eventSlug];
+      } else {
+        if (eventId) next[eventId] = Number(rating);
+        if (eventSlug) next[eventSlug] = Number(rating);
+      }
+      return next;
+    });
+  }, []);
+
+  const refreshAuth = useCallback(async () => {
+    try {
+      const authData = await apiRequest('/api/auth/me');
+      if (authData && authData.user) {
+        setUser(authData.user);
+        setIsAdmin(Boolean(authData.user.is_admin || authData.user.username === 'admin'));
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+        setUserRatings({});
+      }
+    } catch (_) {
+      setUser(null);
+      setIsAdmin(false);
+      setUserRatings({});
+    }
+
+    try {
+      const state = await apiRequest('/api/user/state');
+      if (state) {
+        if (Array.isArray(state.bookmarked_event_ids)) {
+          const combined = Array.from(new Set([...getStoredBookmarks(), ...state.bookmarked_event_ids]));
+          setBookmarkedIds(combined);
+          setStoredBookmarks(combined);
+        }
+        const ratingsMap = {};
+        if (state.user_ratings && typeof state.user_ratings === 'object') {
+          Object.assign(ratingsMap, state.user_ratings);
+        }
+        if (state.user_ratings_by_slug && typeof state.user_ratings_by_slug === 'object') {
+          Object.assign(ratingsMap, state.user_ratings_by_slug);
+        }
+        setUserRatings(ratingsMap);
+      }
+    } catch (_) {}
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    refreshAuth();
+  }, [refreshAuth]);
+
+  const toggleBookmark = useCallback(async (eventId, eventSlug) => {
+    if (!eventId && !eventSlug) return;
+    const targetId = eventId && !isNaN(Number(eventId)) ? Number(eventId) : null;
+    const targetSlug = eventSlug ? String(eventSlug).trim() : null;
+
+    let stored = getStoredBookmarks();
+    const isCurrentlyIn = (targetId && stored.includes(targetId)) || (targetSlug && stored.includes(targetSlug));
+
+    // Optimistic toggle
+    let newStored;
+    if (isCurrentlyIn) {
+      newStored = stored.filter((x) => x !== targetId && x !== targetSlug);
+      showToast('Removed from bookmarks.');
+    } else {
+      newStored = [...stored];
+      if (targetId && !newStored.includes(targetId)) newStored.push(targetId);
+      if (targetSlug && !newStored.includes(targetSlug)) newStored.push(targetSlug);
+      showToast('Saved to your bookmarks! 🔖');
+    }
+    setStoredBookmarks(newStored);
+    setBookmarkedIds(newStored);
+
+    try {
+      const payload = {};
+      if (targetId) payload.event_id = targetId;
+      if (targetSlug) payload.event_slug = targetSlug;
+
+      const res = await apiRequest('/api/bookmarks/toggle', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const actualId = Number(res.event_id || targetId);
+      if (res.bookmarked) {
+        if (actualId && !newStored.includes(actualId)) {
+          newStored.push(actualId);
+          setStoredBookmarks(newStored);
+          setBookmarkedIds([...newStored]);
+        }
+      } else {
+        if (actualId) {
+          newStored = newStored.filter((x) => x !== actualId && x !== targetSlug);
+          setStoredBookmarks(newStored);
+          setBookmarkedIds([...newStored]);
+        }
+      }
+    } catch (err) {
+      const errMsg = err.message ? err.message.toLowerCase() : '';
+      if (errMsg.includes('sign in') || errMsg.includes('authenticated') || errMsg.includes('unauthorized') || errMsg.includes('401')) {
+        showToast(isCurrentlyIn ? 'Removed from bookmarks.' : 'Bookmarked! Sign in to sync with your account 🔖');
+      }
+    }
+  }, [showToast]);
+
+  const logout = useCallback(async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    setUser(null);
+    setIsAdmin(false);
+    showToast('You have been signed out.');
+  }, [showToast]);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: Boolean(user),
+        isAdmin,
+        bookmarkedIds,
+        userRatings,
+        setUserRating,
+        toggleBookmark,
+        refreshAuth,
+        logout,
+        loading,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);

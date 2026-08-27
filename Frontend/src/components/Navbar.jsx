@@ -22,11 +22,6 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
             />
             <span className="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
           </Link>
-          {isAdmin && (
-            <span className="rounded-full bg-ink px-2.5 py-0.5 text-[11px] sm:text-xs font-black uppercase tracking-wider text-white dark:bg-slate-700">
-              Admin
-            </span>
-          )}
         </div>
 
         <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
@@ -55,7 +50,7 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
                 to="/admin-dashboard"
                 className="rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
               >
-                Dashboard
+                Profile
               </Link>
               <button
                 onClick={logout}

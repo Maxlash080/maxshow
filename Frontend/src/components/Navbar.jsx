@@ -9,6 +9,7 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
 
   const initial = user?.name?.trim()?.charAt(0)?.toUpperCase() || 'U';
   const firstName = user?.name?.trim()?.split(' ')[0] || 'Profile';
+  const isDashboardPage = location.pathname === '/dashboard' || location.pathname === '/dashboard.html';
 
   return (
     <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
@@ -45,17 +46,19 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
           )}
 
           {isAuthenticated ? (
-            <Link
-              to="/dashboard"
-              className="flex items-center gap-2 rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
-              title="Open your profile dashboard"
-              aria-label={`Open ${user?.name || 'User'}'s profile dashboard`}
-            >
-              <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[11px] font-black text-white">
-                {initial}
-              </span>
-              <span>Profile</span>
-            </Link>
+            !isDashboardPage ? (
+              <Link
+                to="/dashboard"
+                className="flex items-center gap-2 rounded-full bg-coral px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#df503c] transition"
+                title="Open your profile dashboard"
+                aria-label={`Open ${user?.name || 'User'}'s profile dashboard`}
+              >
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[11px] font-black text-white">
+                  {initial}
+                </span>
+                <span>Profile</span>
+              </Link>
+            ) : null
           ) : isAdmin ? (
             <Link
               to="/admin-dashboard"

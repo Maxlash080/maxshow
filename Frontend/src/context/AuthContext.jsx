@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }) => {
       const authData = await apiRequest('/api/auth/me');
       if (authData && authData.user) {
         setUser(authData.user);
-        setIsAdmin(currentAdmin || Boolean(authData.user.is_admin || authData.user.username === 'admin'));
+        setIsAdmin(Boolean(authData.user.is_admin || authData.user.username === 'admin'));
       } else {
         setUser(null);
         setIsAdmin(currentAdmin);
@@ -159,6 +159,9 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(async () => {
     try {
       await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    try {
+      await apiRequest('/api/admin/logout', { method: 'POST' });
     } catch (_) {}
     setUser(null);
     setIsAdmin(false);

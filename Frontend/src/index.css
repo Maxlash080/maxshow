@@ -58,3 +58,13 @@
   scrollbar-color: rgba(242, 99, 78, 0.35) transparent;
 }
 
+@keyframes shrinkWidth {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+

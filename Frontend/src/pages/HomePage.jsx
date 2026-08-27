@@ -44,14 +44,143 @@ export const HomePage = () => {
   const [advancedFilters, setAdvancedFilters] = useState({ sort: 'popularity', genre: 'All Genres' });
   const [visibleCount, setVisibleCount] = useState(6);
 
+  // Live real-time event updates state
+  const [newlyAddedEventIds, setNewlyAddedEventIds] = useState(new Set());
+  const [liveBanner, setLiveBanner] = useState(null);
+  const [isBannerFading, setIsBannerFading] = useState(false);
+
+  // Auto-dismiss live event banner after 7s with smooth fade
   useEffect(() => {
-    apiRequest('/api/events')
-      .then((data) => {
-        if (data && Array.isArray(data.events) && data.events.length > 0) {
+    if (!liveBanner) {
+      setIsBannerFading(false);
+      return;
+    }
+    setIsBannerFading(false);
+    const fadeTimer = setTimeout(() => setIsBannerFading(true), 6300);
+    const dismissTimer = setTimeout(() => {
+      setLiveBanner(null);
+      setIsBannerFading(false);
+    }, 7000);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(dismissTimer);
+    };
+  }, [liveBanner]);
+
+  // Initial events fetch + Live SSE real-time listener
+  useEffect(() => {
+    let isMounted = true;
+    let eventSource = null;
+    let reconnectTimeout = null;
+
+    const fetchEvents = async () => {
+      try {
+        const data = await apiRequest('/api/events');
+        if (isMounted && data && Array.isArray(data.events) && data.events.length > 0) {
           setEvents(data.events);
         }
-      })
-      .catch(() => {});
+      } catch (e) {
+        console.error('[Home] Error fetching initial events:', e);
+      }
+    };
+
+    fetchEvents();
+
+    const connectLiveEvents = () => {
+      if (!isMounted) return;
+      try {
+        eventSource = new EventSource('/api/events/live-stream');
+
+        eventSource.addEventListener('connected', () => {
+          console.log('[HomeLive] Connected to real-time events stream');
+        });
+
+        eventSource.addEventListener('events_updated', (e) => {
+          if (!isMounted) return;
+          try {
+            const payload = JSON.parse(e.data);
+            const action = payload.action;
+            const ev = payload.event;
+
+            if (action === 'create' && ev) {
+              // 1. Instantly prepend new event so it shows at the very top of discovery & showcase
+              setEvents((prev) => [
+                ev,
+                ...prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug),
+              ]);
+
+              // 2. Mark as newly added for highlight
+              setNewlyAddedEventIds((prev) => {
+                const next = new Set(prev);
+                next.add(ev.id);
+                next.add(ev.slug);
+                return next;
+              });
+
+              // Clear highlight badge after 30s
+              setTimeout(() => {
+                if (isMounted) {
+                  setNewlyAddedEventIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(ev.id);
+                    next.delete(ev.slug);
+                    return next;
+                  });
+                }
+              }, 30000);
+
+              // 3. Show live banner notification
+              setLiveBanner({
+                id: Date.now(),
+                title: '✨ New Experience Just Added!',
+                subtitle: `${ev.title} is now live and open for bookings!`,
+                event: ev,
+              });
+            } else if (action === 'update' && ev) {
+              setEvents((prev) =>
+                prev.map((item) =>
+                  item.id === ev.id || item.slug === ev.slug ? { ...item, ...ev } : item
+                )
+              );
+            } else if (action === 'delete' && payload.id) {
+              setEvents((prev) => prev.filter((item) => item.id !== payload.id));
+            } else {
+              fetchEvents();
+            }
+          } catch (err) {
+            console.error('[HomeLive] Error parsing events_updated payload:', err);
+            fetchEvents();
+          }
+        });
+
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          if (isMounted) {
+            reconnectTimeout = setTimeout(connectLiveEvents, 5000);
+          }
+        };
+      } catch (err) {
+        console.error('[HomeLive] Error setting up EventSource:', err);
+        if (isMounted) {
+          reconnectTimeout = setTimeout(connectLiveEvents, 5000);
+        }
+      }
+    };
+
+    connectLiveEvents();
+
+    return () => {
+      isMounted = false;
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
   }, []);
 
   // Filtered Events for "Location Picks" section
@@ -130,6 +259,77 @@ export const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white flex flex-col">
+      {/* Real-time Floating Live Event Added Banner with 7s auto fade-away */}
+      {liveBanner && (
+        <div
+          className={`fixed top-24 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] sm:w-96 rounded-3xl bg-white/95 dark:bg-[#1c2733]/95 border-2 border-emerald-500 shadow-2xl backdrop-blur p-4 sm:p-5 transition-all duration-700 ${
+            isBannerFading
+              ? 'opacity-0 -translate-y-3 scale-95 pointer-events-none'
+              : 'opacity-100 translate-y-0 scale-100 animate-in slide-in-from-top-4 duration-300'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="relative">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500 text-white font-black text-lg shadow-md shadow-emerald-500/30">
+                  🎪
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300">
+                    Live Event Added
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-400">Auto-close in 7s</span>
+                </div>
+                <h4 className="mt-1 font-black text-sm text-ink dark:text-white truncate">
+                  {liveBanner.title}
+                </h4>
+                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                  {liveBanner.subtitle}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setLiveBanner(null)}
+              className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 transition"
+              title="Dismiss alert"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* 7-Second Animated Countdown Bar */}
+          <div className="mt-3.5 h-1 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-slate-800">
+            <div
+              className="h-full bg-emerald-500 rounded-full origin-left"
+              style={{
+                animation: 'pulse 2s infinite, shrinkWidth 7s linear forwards',
+              }}
+            />
+          </div>
+
+          {liveBanner.event && (
+            <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <button
+                onClick={() => {
+                  const slug = liveBanner.event.slug || liveBanner.event.id;
+                  navigate(`/event/${encodeURIComponent(slug)}`);
+                  setLiveBanner(null);
+                }}
+                className="w-full rounded-xl bg-ink dark:bg-slate-700 py-2 text-xs font-bold text-white hover:bg-coral dark:hover:bg-coral transition"
+              >
+                View Experience →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <Navbar currentLocation={currentLocation} onLocationChange={setCurrentLocation} />
 
       <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-12 flex-1">
@@ -316,7 +516,11 @@ export const HomePage = () => {
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {displayedEvents.map((event) => (
-                <EventCard key={event.slug || event.id} event={event} />
+                <EventCard
+                  key={event.slug || event.id}
+                  event={event}
+                  isNewLive={newlyAddedEventIds.has(event.id) || newlyAddedEventIds.has(event.slug)}
+                />
               ))}
             </div>
           )}

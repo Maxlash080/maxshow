@@ -18,8 +18,43 @@ export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'users' | 'bookings'
   const [loading, setLoading] = useState(true);
 
+  // Live SSE Sync States
+  const [liveStatus, setLiveStatus] = useState('connecting'); // 'connected' | 'connecting' | 'offline'
+  const [liveBanner, setLiveBanner] = useState(null); // { id, type, title, subtitle, user, timestamp }
+  const [isBannerFading, setIsBannerFading] = useState(false);
+  const [newlyRegisteredUserIds, setNewlyRegisteredUserIds] = useState(new Set());
+  const [testingLive, setTestingLive] = useState(false);
+
+  // Auto-dismiss liveBanner after 7 seconds with smooth fade-out animation
+  useEffect(() => {
+    if (!liveBanner) {
+      setIsBannerFading(false);
+      return;
+    }
+
+    setIsBannerFading(false);
+
+    // Start graceful fade-out at 6.3s
+    const fadeTimer = setTimeout(() => {
+      setIsBannerFading(true);
+    }, 6300);
+
+    // Fully dismiss at 7s
+    const dismissTimer = setTimeout(() => {
+      setLiveBanner(null);
+      setIsBannerFading(false);
+    }, 7000);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(dismissTimer);
+    };
+  }, [liveBanner]);
+
   const [stats, setStats] = useState({
     users_count: 0,
+    online_users: 0,
+    offline_users: 0,
     events_count: 0,
     bookings_count: 0,
     tickets_count: 0,
@@ -34,6 +69,7 @@ export const AdminDashboard = () => {
 
   // Search & Filter states
   const [userSearch, setUserSearch] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState('all'); // 'all' | 'online' | 'offline'
   const [eventSearch, setEventSearch] = useState('');
   const [eventCategoryFilter, setEventCategoryFilter] = useState('all');
   const [bookingSearch, setBookingSearch] = useState('');
@@ -113,14 +149,17 @@ export const AdminDashboard = () => {
     }
   };
 
-  const fetchAdminData = useCallback(async () => {
+  const fetchAdminData = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const data = await apiRequest('/api/admin/overview');
       if (data) {
         const s = data.stats || {};
+        const uList = data.users || [];
         setStats({
-          users_count: s.users ?? data.users_count ?? (data.users?.length || 0),
+          users_count: s.users ?? data.users_count ?? uList.length,
+          online_users: s.online_users ?? s.active_users ?? (uList.filter((u) => u.is_online || u.is_active).length || 0),
+          offline_users: s.offline_users ?? s.inactive_users ?? (uList.filter((u) => !u.is_online && !u.is_active).length || 0),
           events_count: s.events ?? data.events_count ?? (data.events?.length || 0),
           bookings_count: s.bookings ?? data.bookings_count ?? (data.all_bookings?.length || 0),
           tickets_count: s.tickets ?? data.tickets_count ?? 0,
@@ -128,7 +167,7 @@ export const AdminDashboard = () => {
           paid_count: s.paid_bookings ?? data.paid_count ?? 0,
           free_count: s.free_bookings ?? data.free_count ?? 0,
         });
-        setUsers(data.users || []);
+        setUsers(uList);
         setEvents(data.events || []);
         setBookings(data.all_bookings || data.bookings || []);
       }
@@ -136,17 +175,240 @@ export const AdminDashboard = () => {
       if (err.message.includes('401') || err.message.includes('403') || err.message.includes('unauthorized')) {
         showToast('Admin session expired. Please sign in again.');
         navigate('/admin');
-      } else {
+      } else if (!isSilent) {
         showToast(err.message || 'Failed to load dashboard metrics');
       }
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [navigate, showToast]);
 
+  const handleTestLiveAlert = async () => {
+    setTestingLive(true);
+    try {
+      await apiRequest('/api/admin/test-live-notification', { method: 'POST' });
+    } catch (err) {
+      showToast(err.message || 'Failed to trigger test live notification');
+    } finally {
+      setTestingLive(false);
+    }
+  };
+
+  // Initial Data Load
   useEffect(() => {
     fetchAdminData();
   }, [fetchAdminData]);
+
+  // Live SSE Real-Time Stream Engine
+  useEffect(() => {
+    let es = null;
+    let reconnectTimer = null;
+    let isComponentMounted = true;
+
+    const connectLiveStream = () => {
+      if (!isComponentMounted) return;
+      try {
+        setLiveStatus('connecting');
+        es = new EventSource('/api/admin/live-stream', { withCredentials: true });
+
+        es.addEventListener('connected', () => {
+          if (isComponentMounted) setLiveStatus('connected');
+        });
+
+        // LIVE REGISTRATION LISTENER
+        es.addEventListener('user_registered', (event) => {
+          if (!isComponentMounted) return;
+          try {
+            const payload = JSON.parse(event.data);
+            const userObj = payload.data || payload;
+            if (!userObj || !userObj.id) return;
+
+            // Ensure is_online is set
+            userObj.is_online = true;
+            userObj.is_active = true;
+            userObj.status = 'Online';
+
+            // 1. Increment stats count immediately
+            setStats((prev) => ({
+              ...prev,
+              users_count: (prev.users_count || 0) + 1,
+              online_users: (prev.online_users || 0) + 1,
+            }));
+
+            // 2. Prepend user to live table
+            setUsers((prev) => {
+              const exists = prev.some((u) => u.id === userObj.id || (userObj.user_id && u.user_id === userObj.user_id));
+              if (exists) return prev;
+              return [userObj, ...prev];
+            });
+
+            // 3. Mark as newly registered for temporary visual glow
+            setNewlyRegisteredUserIds((prev) => new Set(prev).add(userObj.id));
+            setTimeout(() => {
+              if (isComponentMounted) {
+                setNewlyRegisteredUserIds((prev) => {
+                  const updated = new Set(prev);
+                  updated.delete(userObj.id);
+                  return updated;
+                });
+              }
+            }, 60000);
+
+            // 4. Popup high-visibility live alert banner
+            setLiveBanner({
+              id: Date.now(),
+              type: 'register',
+              title: '🎉 New User Registered (Online)!',
+              subtitle: `${userObj.name || userObj.username} (@${userObj.username}) just signed up and is Online!`,
+              user: userObj,
+              timestamp: new Date(),
+            });
+
+            showToast(`🎉 New user registered: ${userObj.name} (@${userObj.username})`);
+          } catch (err) {
+            console.error('[LiveSync] Error processing user_registered event:', err);
+          }
+        });
+
+        // LIVE USER STATUS LISTENER (LOGIN / LOGOUT / ONLINE / OFFLINE)
+        es.addEventListener('user_status_changed', (event) => {
+          if (!isComponentMounted) return;
+          try {
+            const payload = JSON.parse(event.data);
+            const statusData = payload.data || payload;
+            if (!statusData || !statusData.user_id) return;
+
+            const isNowOnline = Boolean(statusData.is_online !== undefined ? statusData.is_online : statusData.is_active);
+            const statusLabel = isNowOnline ? 'Online' : 'Offline';
+
+            // Update user in users array
+            setUsers((prev) =>
+              prev.map((u) => {
+                if (u.id === statusData.user_id) {
+                  return {
+                    ...u,
+                    is_online: isNowOnline,
+                    is_active: isNowOnline,
+                    status: statusLabel,
+                  };
+                }
+                return u;
+              })
+            );
+
+            // Update selected user modal if currently open
+            setSelectedUser((prev) => {
+              if (prev && prev.id === statusData.user_id) {
+                return {
+                  ...prev,
+                  is_online: isNowOnline,
+                  is_active: isNowOnline,
+                  status: statusLabel,
+                };
+              }
+              return prev;
+            });
+
+            // Update live stats online count
+            setStats((prev) => {
+              const onlineCount = isNowOnline
+                ? Math.min(prev.users_count || 1, (prev.online_users || 0) + 1)
+                : Math.max(0, (prev.online_users || 1) - 1);
+              return {
+                ...prev,
+                online_users: onlineCount,
+                offline_users: Math.max(0, (prev.users_count || 0) - onlineCount),
+              };
+            });
+
+            showToast(
+              isNowOnline
+                ? `🟢 ${statusData.name || statusData.username} logged in (Online)`
+                : `⚪ ${statusData.name || statusData.username} logged out (Offline)`
+            );
+          } catch (err) {
+            console.error('[LiveSync] Error processing user_status_changed event:', err);
+          }
+        });
+
+        // LIVE BOOKING LISTENER
+        es.addEventListener('booking_created', (event) => {
+          if (!isComponentMounted) return;
+          try {
+            const payload = JSON.parse(event.data);
+            const bookingObj = payload.data || payload;
+            if (!bookingObj) return;
+
+            const ticketCount = Number(bookingObj.tickets || bookingObj.ticket_count) || 1;
+            const totalAmt = Number(bookingObj.total || bookingObj.total_amount) || 0;
+
+            setStats((prev) => ({
+              ...prev,
+              bookings_count: (prev.bookings_count || 0) + 1,
+              tickets_count: (prev.tickets_count || 0) + ticketCount,
+              total_revenue: (prev.total_revenue || 0) + totalAmt,
+              paid_count: totalAmt > 0 ? (prev.paid_count || 0) + 1 : prev.paid_count,
+              free_count: totalAmt === 0 ? (prev.free_count || 0) + 1 : prev.free_count,
+            }));
+
+            fetchAdminData(true);
+          } catch (err) {
+            console.error('[LiveSync] Error processing booking_created event:', err);
+          }
+        });
+
+        // LIVE EVENT / USER UPDATES
+        es.addEventListener('events_updated', () => {
+          if (isComponentMounted) fetchAdminData(true);
+        });
+
+        es.addEventListener('user_deleted', (event) => {
+          if (!isComponentMounted) return;
+          try {
+            const payload = JSON.parse(event.data);
+            const uId = payload.data?.user_id || payload.user_id;
+            if (uId) {
+              setUsers((prev) => prev.filter((u) => u.id !== uId));
+              setStats((prev) => ({ ...prev, users_count: Math.max(0, (prev.users_count || 1) - 1) }));
+            }
+          } catch (_) {
+            fetchAdminData(true);
+          }
+        });
+
+        es.onerror = () => {
+          if (!isComponentMounted) return;
+          setLiveStatus('connecting');
+          if (es) {
+            es.close();
+            es = null;
+          }
+          reconnectTimer = setTimeout(connectLiveStream, 4000);
+        };
+      } catch (_) {
+        if (isComponentMounted) {
+          setLiveStatus('offline');
+          reconnectTimer = setTimeout(connectLiveStream, 6000);
+        }
+      }
+    };
+
+    connectLiveStream();
+
+    // Fallback periodic sync every 15s to guarantee fresh state
+    const fallbackInterval = setInterval(() => {
+      if (isComponentMounted) {
+        fetchAdminData(true);
+      }
+    }, 15000);
+
+    return () => {
+      isComponentMounted = false;
+      if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (fallbackInterval) clearInterval(fallbackInterval);
+    };
+  }, [fetchAdminData, showToast]);
 
   // Open User Details Modal
   const handleOpenUserDetails = async (u) => {
@@ -329,15 +591,24 @@ export const AdminDashboard = () => {
 
   // Filtered lists
   const filteredUsers = useMemo(() => {
-    if (!userSearch.trim()) return users;
-    const q = userSearch.toLowerCase().trim();
-    return users.filter(
-      (u) =>
-        (u.name || '').toLowerCase().includes(q) ||
-        (u.username || '').toLowerCase().includes(q) ||
-        (u.email || '').toLowerCase().includes(q)
-    );
-  }, [users, userSearch]);
+    let result = [...users];
+    if (userStatusFilter === 'online') {
+      result = result.filter((u) => Boolean(u.is_online || u.is_active));
+    } else if (userStatusFilter === 'offline') {
+      result = result.filter((u) => !u.is_online && !u.is_active);
+    }
+    if (userSearch.trim()) {
+      const q = userSearch.toLowerCase().trim();
+      result = result.filter(
+        (u) =>
+          (u.name || '').toLowerCase().includes(q) ||
+          (u.username || '').toLowerCase().includes(q) ||
+          (u.email || '').toLowerCase().includes(q) ||
+          (u.custom_id || '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [users, userSearch, userStatusFilter]);
 
   const filteredEvents = useMemo(() => {
     let result = [...events];
@@ -378,6 +649,76 @@ export const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white flex flex-col">
+      {/* Real-time Floating Live Alert Popup with 7s auto fade-away */}
+      {liveBanner && (
+        <div
+          className={`fixed top-24 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] sm:w-96 rounded-3xl bg-white/95 dark:bg-[#1c2733]/95 border-2 border-emerald-500 shadow-2xl backdrop-blur p-4 sm:p-5 transition-all duration-700 ${
+            isBannerFading
+              ? 'opacity-0 -translate-y-3 scale-95 pointer-events-none'
+              : 'opacity-100 translate-y-0 scale-100 animate-in slide-in-from-top-4 duration-300'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="relative">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500 text-white font-black text-lg shadow-md shadow-emerald-500/30">
+                  🎉
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300">
+                    Live Registration
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-400">Auto-close in 7s</span>
+                </div>
+                <h4 className="mt-1 font-black text-sm text-ink dark:text-white truncate">
+                  {liveBanner.title}
+                </h4>
+                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                  {liveBanner.subtitle}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setLiveBanner(null)}
+              className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 transition"
+              title="Dismiss alert"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* 7-Second Animated Countdown Bar */}
+          <div className="mt-3.5 h-1 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-slate-800">
+            <div
+              className="h-full bg-emerald-500 rounded-full origin-left"
+              style={{
+                animation: 'pulse 2s infinite, shrinkWidth 7s linear forwards',
+              }}
+            />
+          </div>
+
+          {liveBanner.user && (
+            <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <button
+                onClick={() => {
+                  handleOpenUserDetails(liveBanner.user);
+                  setLiveBanner(null);
+                }}
+                className="w-full rounded-xl bg-ink dark:bg-slate-700 py-2 text-xs font-bold text-white hover:bg-coral dark:hover:bg-coral transition"
+              >
+                View User Profile →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Admin Navbar */}
       <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -395,11 +736,54 @@ export const AdminDashboard = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white/90 px-3.5 py-1.5 text-xs font-bold shadow-sm backdrop-blur dark:border-slate-700 dark:bg-[#101820]">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-slate-600 dark:text-slate-300">Live Sync</span>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Live SSE Sync Status Badge */}
+            <div
+              className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold shadow-sm backdrop-blur transition ${
+                liveStatus === 'connected'
+                  ? 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+                  : liveStatus === 'connecting'
+                  ? 'border-amber-200 bg-amber-50/90 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300'
+                  : 'border-slate-200 bg-white/90 text-slate-600 dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300'
+              }`}
+              title={
+                liveStatus === 'connected'
+                  ? 'Real-Time SSE Sync is Active. Live registrations appear instantly.'
+                  : liveStatus === 'connecting'
+                  ? 'Connecting live stream...'
+                  : 'Offline (Fallback Polling Active)'
+              }
+            >
+              {liveStatus === 'connected' ? (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+              ) : liveStatus === 'connecting' ? (
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+              ) : (
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
+              )}
+              <span className="whitespace-nowrap">
+                {liveStatus === 'connected'
+                  ? 'Live Sync Active'
+                  : liveStatus === 'connecting'
+                  ? 'Connecting...'
+                  : 'Live Polling'}
+              </span>
             </div>
+
+            {/* Test Live Trigger Button */}
+            <button
+              onClick={handleTestLiveAlert}
+              disabled={testingLive}
+              className="flex items-center gap-1.5 rounded-full border border-purple-300 bg-purple-50 px-3.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-300 disabled:opacity-50"
+              title="Trigger a simulated real-time user registration to preview the live experience"
+            >
+              <span>🧪</span>
+              <span className="hidden sm:inline">{testingLive ? 'Simulating...' : 'Test Live Alert'}</span>
+            </button>
+
             <button
               onClick={handleAdminSignOut}
               className="rounded-full bg-ink px-4 py-2 text-xs font-bold text-white hover:bg-red-600 transition dark:bg-slate-700 dark:hover:bg-red-600"
@@ -430,7 +814,16 @@ export const AdminDashboard = () => {
               </span>
             </div>
             <p className="mt-3 text-3xl font-black text-ink dark:text-white">{stats.users_count}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-400">Tap to manage accounts</p>
+            <div className="mt-1 flex items-center gap-2 text-xs font-semibold">
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                {stats.online_users || 0} online
+              </span>
+              <span className="text-slate-400">·</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                {stats.offline_users || Math.max(0, (stats.users_count || 0) - (stats.online_users || 0))} offline
+              </span>
+            </div>
           </div>
 
           {/* 2. Published Events */}
@@ -572,61 +965,143 @@ export const AdminDashboard = () => {
         {/* TAB 2: Users Management */}
         {activeTab === 'users' && (
           <section className="space-y-6">
-            <div className="flex items-center justify-between">
-              <input
-                type="text"
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Search users by name, username, email..."
-                className="w-full max-w-md rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
-              />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search users by name, username, email..."
+                  className="w-full sm:w-72 rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
+                />
+                <div className="flex items-center gap-1.5">
+                  {[
+                    { id: 'all', label: `All (${users.length})` },
+                    { id: 'online', label: `🟢 Online (${stats.online_users || 0})` },
+                    { id: 'offline', label: `⚪ Offline (${stats.offline_users || 0})` },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setUserStatusFilter(f.id)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition whitespace-nowrap ${
+                        userStatusFilter === f.id
+                          ? 'bg-ink text-white dark:bg-coral'
+                          : 'border border-stone-300 bg-white text-slate-600 hover:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <span className="text-xs font-bold text-slate-400">
                 {filteredUsers.length} user{filteredUsers.length === 1 ? '' : 's'}
               </span>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredUsers.map((u) => {
-                const initial = u.name?.charAt(0)?.toUpperCase() || 'U';
-                return (
-                  <div
-                    key={u.id}
-                    className="flex flex-col justify-between rounded-3xl border border-stone-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-[#1c2733]"
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral/10 text-base font-black text-coral dark:bg-coral/20">
-                        {initial}
+              {filteredUsers.length === 0 ? (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-3xl border border-dashed border-stone-300 dark:border-slate-700 p-10 text-center space-y-2 bg-white/50 dark:bg-[#1c2733]/50">
+                  <span className="text-4xl">👥</span>
+                  <h4 className="font-black text-ink dark:text-white text-base">
+                    {userStatusFilter === 'online'
+                      ? 'No users currently online'
+                      : userStatusFilter === 'offline'
+                      ? 'No offline users found'
+                      : 'No users found matching your search'}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                    {userStatusFilter === 'online'
+                      ? 'When a user logs into MAXSHOW, they will automatically appear here as Online with a live green indicator.'
+                      : 'Try changing your search terms or filter.'}
+                  </p>
+                  {userStatusFilter !== 'all' && (
+                    <button
+                      onClick={() => setUserStatusFilter('all')}
+                      className="mt-2 rounded-xl bg-ink dark:bg-slate-700 px-4 py-2 text-xs font-bold text-white hover:bg-coral transition"
+                    >
+                      Show All Users ({users.length})
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredUsers.map((u) => {
+                  const initial = u.name?.charAt(0)?.toUpperCase() || 'U';
+                  const isJustRegistered = newlyRegisteredUserIds.has(u.id);
+                  const isOnline = Boolean(u.is_online || u.is_active);
+                  return (
+                    <div
+                      key={u.id}
+                      className={`flex flex-col justify-between rounded-3xl border p-5 shadow-sm transition-all duration-300 ${
+                        isJustRegistered
+                          ? 'border-emerald-500 ring-2 ring-emerald-400/40 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-md animate-in zoom-in-95'
+                          : isOnline
+                          ? 'border-emerald-200/80 bg-white dark:border-emerald-900/40 dark:bg-[#1c2733]'
+                          : 'border-stone-200/80 bg-white dark:border-slate-700/80 dark:bg-[#1c2733]'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-start gap-3.5">
+                          <div
+                            className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-base font-black transition-all ${
+                              isJustRegistered
+                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 animate-pulse'
+                                : isOnline
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                : 'bg-stone-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                            }`}
+                          >
+                            {initial}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="font-black text-ink dark:text-white truncate">{u.name}</h4>
+                              {isJustRegistered ? (
+                                <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm animate-pulse">
+                                  ✨ Live New
+                                </span>
+                              ) : isOnline ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  Online
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                  Offline
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs font-bold text-coral truncate">@{u.username}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{u.email}</p>
+                            <p className="mt-1 text-[11px] font-semibold text-slate-400">ID: {u.custom_id || `USR-${u.id}`}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-black text-ink dark:text-white truncate">{u.name}</h4>
-                        <p className="text-xs font-bold text-coral truncate">@{u.username}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{u.email}</p>
-                        <p className="mt-1 text-[11px] font-semibold text-slate-400">ID: {u.custom_id || `USR-${u.id}`}</p>
-                      </div>
-                    </div>
 
-                    <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 dark:border-slate-700">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                        {u.bookings_count || 0} booking{(u.bookings_count || 0) === 1 ? '' : 's'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleOpenUserDetails(u)}
-                          className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300"
-                        >
-                          Details
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(u)}
-                          className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#101820]"
-                        >
-                          Delete
-                        </button>
+                      <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 dark:border-slate-700">
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                          {u.bookings_count || 0} booking{(u.bookings_count || 0) === 1 ? '' : 's'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenUserDetails(u)}
+                            className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300"
+                          >
+                            Details
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(u)}
+                            className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#101820]"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </section>
         )}
@@ -797,6 +1272,24 @@ export const AdminDashboard = () => {
               </div>
 
               <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
+                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Account Status</p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  {(selectedUser.is_online || selectedUser.is_active) ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-600 dark:text-emerald-400">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Online
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                      <span className="h-2 w-2 rounded-full bg-slate-400"></span>
+                      Offline
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-400 font-semibold">Live Session</span>
+              </div>
+
+              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
                 <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Total Spent</p>
                 <p className="font-black text-coral text-base mt-0.5">
                   {formatPrice(
@@ -876,7 +1369,7 @@ export const AdminDashboard = () => {
             </div>
 
             {/* Footer Actions */}
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
               <button
                 onClick={() => handleDeleteUser(selectedUser)}
                 className="w-full rounded-2xl border border-red-300 bg-red-50 py-3 text-xs sm:text-sm font-bold text-red-600 hover:bg-red-100 transition dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"

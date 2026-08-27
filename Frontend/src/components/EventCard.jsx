@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatPrice, formatEventTime, escapeHtml } from '../utils/formatters';
 import { useAuth } from '../context/AuthContext';
 
-export const EventCard = ({ event }) => {
+export const EventCard = ({ event, isNewLive = false }) => {
   const navigate = useNavigate();
   const { bookmarkedIds, toggleBookmark } = useAuth();
 
@@ -41,7 +41,11 @@ export const EventCard = ({ event }) => {
       }}
       tabIndex={0}
       role="link"
-      className="event-card group relative cursor-pointer rounded-3xl transition hover:-translate-y-1 hover:shadow-soft bg-white border border-stone-200/80 dark:bg-[#1c2733] dark:border-slate-700/80 overflow-hidden select-none"
+      className={`event-card group relative cursor-pointer rounded-3xl transition duration-300 hover:-translate-y-1 hover:shadow-soft bg-white border dark:bg-[#1c2733] overflow-hidden select-none ${
+        isNewLive
+          ? 'border-emerald-500 ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/20 animate-in fade-in zoom-in-95 duration-500'
+          : 'border-stone-200/80 dark:border-slate-700/80'
+      }`}
     >
       <div className="relative h-60 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
         <img
@@ -53,6 +57,14 @@ export const EventCard = ({ event }) => {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+
+        {/* Live Just Added Tag */}
+        {(isNewLive || event.is_new_live) && (
+          <span className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 backdrop-blur-md px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-md">
+            <span className="h-2 w-2 rounded-full bg-white animate-ping"></span>
+            Live Just Added
+          </span>
+        )}
 
         {/* Bookmark Button */}
         <button

@@ -52,19 +52,27 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const refreshAuth = useCallback(async () => {
+    let currentAdmin = false;
+    try {
+      const adminData = await apiRequest('/api/admin/me');
+      if (adminData && adminData.admin) {
+        currentAdmin = true;
+      }
+    } catch (_) {}
+
     try {
       const authData = await apiRequest('/api/auth/me');
       if (authData && authData.user) {
         setUser(authData.user);
-        setIsAdmin(Boolean(authData.user.is_admin || authData.user.username === 'admin'));
+        setIsAdmin(currentAdmin || Boolean(authData.user.is_admin || authData.user.username === 'admin'));
       } else {
         setUser(null);
-        setIsAdmin(false);
+        setIsAdmin(currentAdmin);
         setUserRatings({});
       }
     } catch (_) {
       setUser(null);
-      setIsAdmin(false);
+      setIsAdmin(currentAdmin);
       setUserRatings({});
     }
 

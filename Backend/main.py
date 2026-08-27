@@ -607,8 +607,16 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+main_event_loop = None
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    global main_event_loop
+    try:
+        main_event_loop = asyncio.get_running_loop()
+    except Exception:
+        pass
     Base.metadata.create_all(bind=engine)
     try:
         insp = inspect(engine)
@@ -779,23 +787,33 @@ class AdminNotificationBroker:
     def unsubscribe(self, q: asyncio.Queue):
         self.subscribers.discard(q)
 
+    def _deliver_message(self, msg: str):
+        for q in list(self.subscribers):
+            try:
+                q.put_nowait(msg)
+            except Exception:
+                self.subscribers.discard(q)
+
     async def broadcast(self, event_type: str, data: dict):
         if not self.subscribers:
             return
         payload = json.dumps({"type": event_type, "data": data, "timestamp": time.time()})
         msg = f"event: {event_type}\ndata: {payload}\n\n"
-        for q in list(self.subscribers):
-            try:
-                await q.put(msg)
-            except Exception:
-                self.subscribers.discard(q)
+        self._deliver_message(msg)
 
     def broadcast_sync(self, event_type: str, data: dict):
+        global main_event_loop
+        if not self.subscribers:
+            return
+        payload = json.dumps({"type": event_type, "data": data, "timestamp": time.time()})
+        msg = f"event: {event_type}\ndata: {payload}\n\n"
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.broadcast(event_type, data))
-        except RuntimeError:
-            pass
+            if main_event_loop and main_event_loop.is_running():
+                main_event_loop.call_soon_threadsafe(self._deliver_message, msg)
+            else:
+                self._deliver_message(msg)
+        except Exception:
+            self._deliver_message(msg)
 
 
 admin_broker = AdminNotificationBroker()
@@ -824,7 +842,7 @@ def require_user(request: Request, db: Session) -> User:
 
 
 def require_admin(request: Request) -> None:
-    token = request.cookies.get("maxshow_admin_session")
+    token = request.cookies.get("maxshow_admin_session") or request.query_params.get("token") or request.query_params.get("admin_token")
     if not token or token not in admin_sessions:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin sign-in required.")
 
@@ -1064,6 +1082,12 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
             "email": user.email,
             "phone": user.phone_number,
             "created_at": user.created_at.isoformat() if user.created_at else datetime.now().isoformat(),
+            "total_spent": 0,
+            "ticket_count": 0,
+            "bookings_count": 0,
+            "bookings": [],
+            "is_online": True,
+            "status": "Online",
         })
     except IntegrityError:
         db.rollback()
@@ -1115,6 +1139,20 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     session_token = secrets.token_urlsafe(32)
     active_sessions[session_token] = matched_user.id
     response.set_cookie("maxshow_session", session_token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False)
+
+    # Real-time Broadcast: User is now ONLINE
+    admin_broker.broadcast_sync("user_status_changed", {
+        "user_id": matched_user.id,
+        "custom_id": matched_user.custom_id,
+        "name": matched_user.full_name,
+        "username": matched_user.username,
+        "email": matched_user.email,
+        "is_online": True,
+        "status": "Online",
+        "action": "login",
+        "timestamp": datetime.now().isoformat(),
+    })
+
     return {"message": "Login successful.", "user": user_data(matched_user)}
 
 
@@ -1124,10 +1162,25 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> dict:
 
 
 @app.post("/api/auth/logout")
-def logout(request: Request, response: Response) -> dict:
+def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     session_token = request.cookies.get("maxshow_session")
-    if session_token:
-        active_sessions.pop(session_token, None)
+    user_id = active_sessions.pop(session_token, None) if session_token else None
+    if user_id:
+        user = db.get(User, user_id)
+        has_other_sessions = user_id in active_sessions.values()
+        if not has_other_sessions:
+            # Real-time Broadcast: User is now OFFLINE
+            admin_broker.broadcast_sync("user_status_changed", {
+                "user_id": user_id,
+                "custom_id": user.custom_id if user else f"USR-{user_id}",
+                "name": user.full_name if user else "User",
+                "username": user.username if user else "user",
+                "email": user.email if user else "",
+                "is_online": False,
+                "status": "Offline",
+                "action": "logout",
+                "timestamp": datetime.now().isoformat(),
+            })
     response.delete_cookie("maxshow_session")
     return {"message": "You have been logged out."}
 
@@ -1277,6 +1330,66 @@ async def admin_live_stream(request: Request):
     )
 
 
+@app.get("/api/events/live-stream")
+async def events_live_stream(request: Request):
+    """Public SSE stream for real-time event additions, updates, and removals on the Home page."""
+    q = admin_broker.subscribe()
+
+    async def event_generator():
+        try:
+            yield f"event: connected\ndata: {json.dumps({'message': 'Live events stream connected', 'time': time.time()})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield msg
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        except (asyncio.CancelledError, GeneratorExit):
+            pass
+        finally:
+            admin_broker.unsubscribe(q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/admin/test-live-notification")
+def test_live_notification(request: Request) -> dict:
+    require_admin(request)
+    hex_id = secrets.token_hex(2).upper()
+    simulated_id = int(time.time())
+    test_user = {
+        "id": simulated_id,
+        "user_id": f"USR-LIVE-{hex_id}",
+        "username": f"explorer_{hex_id.lower()}",
+        "name": f"Aarav Mehta #{hex_id}",
+        "email": f"aarav.{hex_id.lower()}@example.com",
+        "phone": "+91 98201 44521",
+        "created_at": datetime.now().isoformat(),
+        "total_spent": 0,
+        "ticket_count": 0,
+        "bookings_count": 0,
+        "bookings": [],
+        "is_online": True,
+        "status": "Online",
+    }
+    # Keep online in memory
+    dummy_token = secrets.token_urlsafe(32)
+    active_sessions[dummy_token] = simulated_id
+
+    admin_broker.broadcast_sync("user_registered", test_user)
+    return {"message": "Test live registration broadcast emitted successfully!", "user": test_user}
+
+
 @app.post("/api/admin/upload-image")
 def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
     require_admin(request)
@@ -1407,11 +1520,15 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
                 "created_at": b.created_at.isoformat() if b.created_at else "",
             })
 
+    logged_in_user_ids = set(active_sessions.values())
+    online_users_count = sum(1 for u in users if u.id in logged_in_user_ids)
+
     users_list = []
     for u in users:
         u_bookings = user_bookings_map.get(u.id, [])
         u_total_spent = sum(item["total"] for item in u_bookings)
         u_ticket_count = sum(item["tickets"] for item in u_bookings)
+        is_user_online = (u.id in logged_in_user_ids)
         users_list.append({
             "id": u.id,
             "user_id": u.custom_id or generate_user_custom_id(u.full_name, u.phone_number),
@@ -1424,6 +1541,9 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
             "ticket_count": u_ticket_count,
             "bookings_count": len(u_bookings),
             "bookings": u_bookings,
+            "is_online": is_user_online,
+            "is_active": is_user_online,
+            "status": "Online" if is_user_online else "Offline",
         })
 
     events_list = []
@@ -1438,6 +1558,8 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
     return {
         "stats": {
             "users": len(users),
+            "online_users": online_users_count,
+            "offline_users": len(users) - online_users_count,
             "events": len(events),
             "bookings": len(bookings),
             "revenue": total_revenue,
@@ -1451,6 +1573,46 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
     }
 
 
+@app.post("/api/admin/users/{user_id}/toggle-status")
+def toggle_user_status(user_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_admin(request)
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    
+    is_currently_active = user_id in active_sessions.values()
+    
+    if is_currently_active:
+        for token, uid in list(active_sessions.items()):
+            if uid == user_id:
+                active_sessions.pop(token, None)
+        new_active = False
+        new_status = "Deactivated"
+    else:
+        dummy_token = secrets.token_urlsafe(32)
+        active_sessions[dummy_token] = user_id
+        new_active = True
+        new_status = "Active"
+
+    admin_broker.broadcast_sync("user_status_changed", {
+        "user_id": user.id,
+        "custom_id": user.custom_id,
+        "name": user.full_name,
+        "username": user.username,
+        "email": user.email,
+        "is_active": new_active,
+        "status": new_status,
+        "action": "admin_toggle",
+        "timestamp": datetime.now().isoformat(),
+    })
+
+    return {
+        "message": f"User account has been {new_status.lower()}.",
+        "is_active": new_active,
+        "status": new_status,
+    }
+
+
 @app.post("/api/admin/events", status_code=status.HTTP_201_CREATED)
 def create_event(payload: EventRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
@@ -1460,11 +1622,17 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
     try:
         db.commit()
         db.refresh(event)
-        admin_broker.broadcast_sync("events_updated", {"action": "create", "id": event.id, "title": event.title})
+        ev_data = event_data(event)
+        admin_broker.broadcast_sync("events_updated", {
+            "action": "create",
+            "id": event.id,
+            "title": event.title,
+            "event": ev_data,
+        })
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An event with this slug already exists.")
-    return {"event": event_data(event)}
+    return {"event": ev_data}
 
 
 @app.put("/api/admin/events/{event_id}")
@@ -1479,11 +1647,17 @@ def update_event(event_id: int, payload: EventRequest, request: Request, db: Ses
     try:
         db.commit()
         db.refresh(event)
-        admin_broker.broadcast_sync("events_updated", {"action": "update", "id": event.id, "title": event.title})
+        ev_data = event_data(event)
+        admin_broker.broadcast_sync("events_updated", {
+            "action": "update",
+            "id": event.id,
+            "title": event.title,
+            "event": ev_data,
+        })
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An event with this slug already exists.")
-    return {"event": event_data(event)}
+    return {"event": ev_data}
 
 
 @app.delete("/api/admin/events/{event_id}")
@@ -1495,7 +1669,11 @@ def delete_event(event_id: int, request: Request, db: Session = Depends(get_db))
     title = event.title
     db.delete(event)
     db.commit()
-    admin_broker.broadcast_sync("events_updated", {"action": "delete", "id": event_id, "title": title})
+    admin_broker.broadcast_sync("events_updated", {
+        "action": "delete",
+        "id": event_id,
+        "title": title,
+    })
     return {"message": "Event deleted."}
 
 

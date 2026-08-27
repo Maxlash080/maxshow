@@ -12,6 +12,42 @@ export const LOCATIONS = [
   'Aundh',
 ];
 
+export const AREA_OPTIONS = [
+  'Hinjawadi, Pune',
+  'Pimpri, Pune',
+  'Chinchwad, Pune',
+  'Kasarwadi, Pimpri-Chinchwad',
+  'Nigdi, Pimpri-Chinchwad',
+  'Punawale, Pune',
+  'Aundh, Pune',
+  'Baner, Pune',
+  'Wakad, Pune',
+  'Viman Nagar, Pune',
+  'Koregaon Park, Pune',
+  'Kothrud, Pune',
+  'Ravet, Pune',
+  'Bhosari, Pune',
+  'Kalyani Nagar, Pune',
+  'Hadapsar, Pune',
+  'Shivajinagar, Pune',
+  'Pune',
+];
+
+export const EVENT_CATEGORIES = [
+  { id: 'music', name: 'Music', icon: '🎵' },
+  { id: 'nightlife', name: 'Nightlife', icon: '🍸' },
+  { id: 'comedy', name: 'Comedy', icon: '🎭' },
+  { id: 'move', name: 'Sports & Move', icon: '🏃' },
+  { id: 'performances', name: 'Performances', icon: '🎪' },
+  { id: 'food', name: 'Food & Drinks', icon: '🍜' },
+  { id: 'fests', name: 'Fests & Fairs', icon: '🎡' },
+  { id: 'social', name: 'Social Mixers', icon: '✨' },
+  { id: 'outdoors', name: 'Outdoors', icon: '🏕️' },
+  { id: 'create', name: 'Workshops', icon: '🎨' },
+  { id: 'screenings', name: 'Screenings', icon: '🎬' },
+  { id: 'pets', name: 'Pets', icon: '🐾' },
+];
+
 export const FALLBACK_EVENTS = {
   'moonlight-picnic': {
     id: 1,

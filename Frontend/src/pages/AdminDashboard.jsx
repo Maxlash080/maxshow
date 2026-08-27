@@ -6,6 +6,8 @@ import { useToast } from '../context/ToastContext';
 import { useConfirmModal } from '../context/ModalContext';
 import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
+import { CategoryDropdown } from '../components/CategoryDropdown';
+import { AreaDropdown } from '../components/AreaDropdown';
 
 export const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -496,19 +498,14 @@ export const AdminDashboard = () => {
                   placeholder="Search events by title, venue..."
                   className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
                 />
-                <select
-                  value={eventCategoryFilter}
-                  onChange={(e) => setEventCategoryFilter(e.target.value)}
-                  className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
-                >
-                  <option value="all">All Categories</option>
-                  <option value="music">Music</option>
-                  <option value="comedy">Comedy</option>
-                  <option value="outdoors">Outdoors</option>
-                  <option value="food">Food & Drinks</option>
-                  <option value="create">Workshops</option>
-                  <option value="move">Sports & Move</option>
-                </select>
+                <div className="w-44 sm:w-52">
+                  <CategoryDropdown
+                    value={eventCategoryFilter}
+                    onChange={(val) => setEventCategoryFilter(val)}
+                    includeAll={true}
+                    allLabel="All Categories"
+                  />
+                </div>
               </div>
 
               <button
@@ -944,20 +941,10 @@ export const AdminDashboard = () => {
 
               <div>
                 <label className="mb-1 block font-bold text-ink dark:text-slate-200">Category</label>
-                <select
+                <CategoryDropdown
                   value={eventFormData.category}
-                  onChange={(e) => setEventFormData({ ...eventFormData, category: e.target.value })}
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                >
-                  <option value="music">Music</option>
-                  <option value="comedy">Comedy</option>
-                  <option value="outdoors">Outdoors</option>
-                  <option value="food">Food & Drinks</option>
-                  <option value="create">Workshops</option>
-                  <option value="move">Sports & Move</option>
-                  <option value="fests">Fests & Fairs</option>
-                  <option value="screenings">Screenings</option>
-                </select>
+                  onChange={(val) => setEventFormData({ ...eventFormData, category: val })}
+                />
               </div>
 
               <div>
@@ -974,12 +961,10 @@ export const AdminDashboard = () => {
 
               <div>
                 <label className="mb-1 block font-bold text-ink dark:text-slate-200">City / Area</label>
-                <input
-                  type="text"
+                <AreaDropdown
                   value={eventFormData.location}
-                  onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })}
+                  onChange={(val) => setEventFormData({ ...eventFormData, location: val })}
                   placeholder="e.g. Hinjawadi, Pune"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                   required
                 />
               </div>

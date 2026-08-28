@@ -4,6 +4,7 @@ import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { validateIndianMobile } from '../utils/formatters';
+import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../utils/firebase';
 
 export const RegistrationPage = () => {
   const navigate = useNavigate();
@@ -34,8 +35,20 @@ export const RegistrationPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   const timerRef = useRef(null);
+  const phoneTimerRef = useRef(null);
 
-  // OTP Countdown timer
+  // Phone OTP States (Firebase SMS)
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneOtpVerified, setPhoneOtpVerified] = useState(false);
+  const [phoneOtpTimer, setPhoneOtpTimer] = useState(0);
+  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false);
+  const [verifyingPhoneOtp, setVerifyingPhoneOtp] = useState(false);
+  const [phoneOtpStatusMsg, setPhoneOtpStatusMsg] = useState('');
+  const [phoneOtpStatusType, setPhoneOtpStatusType] = useState('info'); // 'info' | 'success' | 'error'
+  const [confirmationResult, setConfirmationResult] = useState(null);
+
+  // Email OTP Countdown timer
   useEffect(() => {
     if (otpTimer > 0) {
       timerRef.current = setTimeout(() => {
@@ -44,6 +57,16 @@ export const RegistrationPage = () => {
     }
     return () => clearTimeout(timerRef.current);
   }, [otpTimer]);
+
+  // Phone OTP Countdown timer
+  useEffect(() => {
+    if (phoneOtpTimer > 0) {
+      phoneTimerRef.current = setTimeout(() => {
+        setPhoneOtpTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearTimeout(phoneTimerRef.current);
+  }, [phoneOtpTimer]);
 
   // Password requirements calculation
   const p = formData.password;
@@ -119,6 +142,96 @@ export const RegistrationPage = () => {
     }
   };
 
+  const handleSendPhoneOtp = async () => {
+    const validation = validateIndianMobile(formData.phone);
+    if (!validation.isValid || formData.phone.length !== 10) {
+      showToast(validation.error || 'Please enter a valid 10-digit mobile number first.');
+      return;
+    }
+
+    setSendingPhoneOtp(true);
+    setPhoneOtpStatusMsg('Sending SMS verification code to your phone...');
+    setPhoneOtpStatusType('info');
+
+    try {
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-phone-container', {
+          size: 'invisible',
+          callback: () => {},
+          'expired-callback': () => {
+            showToast('reCAPTCHA expired. Please try again.');
+          },
+        });
+      }
+
+      const appVerifier = window.recaptchaVerifier;
+      const formattedPhoneNumber = `+91${formData.phone.trim()}`;
+      const confirmation = await signInWithPhoneNumber(auth, formattedPhoneNumber, appVerifier);
+
+      setConfirmationResult(confirmation);
+      setPhoneOtpSent(true);
+      setPhoneOtpVerified(false);
+      setPhoneOtpTimer(60);
+      setPhoneOtpStatusMsg(`6-digit SMS code sent to +91 ${formData.phone.trim()}. Please enter it below.`);
+      setPhoneOtpStatusType('success');
+      showToast('SMS OTP sent to your phone! 📱');
+    } catch (err) {
+      console.error('[Firebase Phone Auth] Error:', err);
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        } catch (_) {}
+      }
+      let errorText = 'Failed to send SMS OTP. Please check the number or try again.';
+      if (err.code === 'auth/invalid-phone-number') {
+        errorText = 'Invalid phone number format.';
+      } else if (err.code === 'auth/too-many-requests') {
+        errorText = 'Too many requests. Please wait a few minutes before trying again.';
+      } else if (err.code === 'auth/quota-exceeded') {
+        errorText = 'SMS quota exceeded for today. Please try again later.';
+      } else if (err.message) {
+        errorText = err.message;
+      }
+      setPhoneOtpStatusMsg(errorText);
+      setPhoneOtpStatusType('error');
+      showToast(errorText);
+    } finally {
+      setSendingPhoneOtp(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    if (!phoneOtp.trim() || phoneOtp.trim().length !== 6) {
+      showToast('Please enter the 6-digit SMS verification code.');
+      return;
+    }
+    if (!confirmationResult) {
+      showToast('Please request an SMS OTP first.');
+      return;
+    }
+
+    setVerifyingPhoneOtp(true);
+    setPhoneOtpStatusMsg('Verifying SMS code...');
+    setPhoneOtpStatusType('info');
+
+    try {
+      await confirmationResult.confirm(phoneOtp.trim());
+      setPhoneOtpVerified(true);
+      setPhoneOtpStatusMsg('Phone number verified successfully! ✓');
+      setPhoneOtpStatusType('success');
+      showToast('Phone number verified successfully! ✓');
+    } catch (err) {
+      console.error('[Firebase Phone Auth] Verify Error:', err);
+      setPhoneOtpVerified(false);
+      setPhoneOtpStatusMsg('Invalid or expired SMS OTP code. Please check and try again.');
+      setPhoneOtpStatusType('error');
+      showToast('Invalid SMS OTP code');
+    } finally {
+      setVerifyingPhoneOtp(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -144,6 +257,11 @@ export const RegistrationPage = () => {
       if (!phoneValidation.isValid) {
         setErrorMessage(phoneValidation.error);
         showToast(phoneValidation.error);
+        return;
+      }
+      if (phoneOtpSent && !phoneOtpVerified) {
+        setErrorMessage('Please verify your mobile number with the 6-digit SMS OTP code.');
+        showToast('Please complete phone verification');
         return;
       }
     }
@@ -261,7 +379,8 @@ export const RegistrationPage = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-5 grid gap-3.5 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="mt-5 grid gap-4 sm:grid-cols-2">
+            {/* Full Name */}
             <div>
               <label className="mb-1 block text-xs font-bold text-ink dark:text-slate-200" htmlFor="full_name">
                 Full name
@@ -272,11 +391,12 @@ export const RegistrationPage = () => {
                 value={formData.full_name}
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 placeholder="e.g. Rahul Sharma"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                 required
               />
             </div>
 
+            {/* Username */}
             <div>
               <label className="mb-1 block text-xs font-bold text-ink dark:text-slate-200" htmlFor="username">
                 Username
@@ -288,16 +408,23 @@ export const RegistrationPage = () => {
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 placeholder="e.g. rahul_99"
                 maxLength={30}
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                 required
               />
             </div>
 
             {/* Email with Send OTP action */}
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-bold text-ink dark:text-slate-200" htmlFor="email">
-                Email address
-              </label>
+            <div className="sm:col-span-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-ink dark:text-slate-200" htmlFor="email">
+                  Email address
+                </label>
+                {otpVerified && (
+                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300">
+                    ✓ Email Verified
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <input
                   id="email"
@@ -306,30 +433,36 @@ export const RegistrationPage = () => {
                   disabled={otpVerified}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="you@example.com"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white disabled:opacity-70"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white disabled:opacity-70"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={sendingOtp || otpTimer > 0 || otpVerified}
-                  className="shrink-0 rounded-xl bg-coral px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-coral/20 hover:bg-[#df503c] transition whitespace-nowrap disabled:opacity-50"
-                >
-                  {otpVerified ? 'Verified ✓' : sendingOtp ? 'Sending...' : otpTimer > 0 ? `Resend in ${otpTimer}s` : 'Send OTP'}
-                </button>
+                {!otpVerified && (
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={sendingOtp || otpTimer > 0}
+                    className="shrink-0 rounded-xl bg-coral px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-coral/20 hover:bg-[#df503c] transition whitespace-nowrap disabled:opacity-50"
+                  >
+                    {sendingOtp ? 'Sending...' : otpTimer > 0 ? `Resend (${otpTimer}s)` : otpSent ? 'Resend OTP' : 'Send OTP'}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* OTP Section (Shown if OTP sent or active) */}
+            {/* Email OTP Verification Box */}
             {(otpSent || otpVerified) && (
-              <div className="sm:col-span-2 rounded-2xl bg-coral/5 border border-coral/20 p-3.5 dark:bg-[#151f2b] dark:border-slate-700 space-y-2">
+              <div className="sm:col-span-2 rounded-2xl bg-coral/5 border border-coral/30 p-4 dark:bg-coral/[0.08] dark:border-coral/40 space-y-2.5 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold uppercase tracking-wider text-coral" htmlFor="otp">
-                    Enter 6-Digit OTP *
+                    ✉️ Enter 6-Digit Email OTP
                   </label>
-                  {otpVerified && <span className="text-xs font-bold text-emerald-500">Verified ✓</span>}
+                  {otpVerified ? (
+                    <span className="text-xs font-bold text-emerald-500">Verified ✓</span>
+                  ) : otpTimer > 0 ? (
+                    <span className="text-xs font-bold text-coral">Resend in {otpTimer}s</span>
+                  ) : null}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex gap-2">
                   <input
                     id="otp"
                     type="text"
@@ -339,76 +472,114 @@ export const RegistrationPage = () => {
                     disabled={otpVerified}
                     onChange={(e) => setFormData({ ...formData, otp: e.target.value.replace(/\D/g, '') })}
                     placeholder="------"
-                    className="w-full rounded-xl border border-stone-300 px-4 py-2 text-base font-mono font-bold tracking-[0.35em] text-center outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                    className="w-full rounded-xl border border-stone-300 bg-white px-4 py-2 text-base font-mono font-bold tracking-[0.35em] text-center outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white disabled:opacity-75"
                   />
                   {!otpVerified && (
                     <button
                       type="button"
                       onClick={handleVerifyOtp}
                       disabled={verifyingOtp || formData.otp.length !== 6}
-                      className="rounded-xl bg-ink text-white dark:bg-slate-800 dark:text-white px-5 py-2 text-xs font-bold transition hover:bg-coral dark:hover:bg-coral whitespace-nowrap disabled:opacity-50"
+                      className="rounded-xl bg-ink text-white dark:bg-slate-700 dark:text-white px-5 py-2 text-xs font-bold transition hover:bg-coral dark:hover:bg-coral whitespace-nowrap disabled:opacity-50"
                     >
                       {verifyingOtp ? 'Verifying...' : 'Verify OTP'}
                     </button>
                   )}
                 </div>
-                <p
-                  className={`text-xs font-semibold ${
-                    otpStatusType === 'success'
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : otpStatusType === 'error'
-                      ? 'text-red-500'
-                      : 'text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  {otpStatusMsg}
-                </p>
+                {otpStatusMsg && (
+                  <p
+                    className={`text-xs font-semibold ${
+                      otpStatusType === 'success'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : otpStatusType === 'error'
+                        ? 'text-red-500'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {otpStatusMsg}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Mobile Number */}
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between mb-1">
+            {/* Mobile Number & Phone SMS OTP Verification */}
+            <div className="sm:col-span-2 space-y-2">
+              <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-ink dark:text-slate-200" htmlFor="phone">
                   Mobile number (optional)
                 </label>
-                {formData.phone && (
+                {phoneOtpVerified ? (
+                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300">
+                    ✓ SMS Verified
+                  </span>
+                ) : formData.phone ? (
                   <span className="text-[11px] font-semibold text-slate-400">
                     {formData.phone.length}/10 digits
                   </span>
+                ) : null}
+              </div>
+
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 select-none">
+                    +91
+                  </div>
+                  <input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    disabled={phoneOtpVerified}
+                    value={formData.phone}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({ ...formData, phone: digitsOnly });
+                      if (phoneOtpSent && !phoneOtpVerified) {
+                        setPhoneOtpSent(false);
+                        setPhoneOtp('');
+                        setPhoneOtpStatusMsg('');
+                      }
+                    }}
+                    placeholder="10-digit mobile number"
+                    maxLength={10}
+                    className={`w-full rounded-xl border pl-12 pr-3.5 py-2.5 text-sm font-semibold outline-none transition focus:ring-4 bg-white dark:bg-[#101820] dark:text-white ${
+                      phoneOtpVerified
+                        ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20 text-slate-600 dark:text-slate-300'
+                        : formData.phone.length === 10
+                        ? validateIndianMobile(formData.phone).isValid
+                          ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20'
+                          : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : formData.phone.length > 0 && !/^[6-9]/.test(formData.phone)
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-stone-300 focus:border-coral focus:ring-coral/20 dark:border-slate-700'
+                    } disabled:opacity-75`}
+                  />
+                  {phoneOtpVerified && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-base">
+                      ✓
+                    </span>
+                  )}
+                </div>
+
+                {!phoneOtpVerified && formData.phone.length === 10 && validateIndianMobile(formData.phone).isValid && (
+                  <button
+                    type="button"
+                    onClick={handleSendPhoneOtp}
+                    disabled={sendingPhoneOtp || phoneOtpTimer > 0}
+                    className="shrink-0 rounded-xl bg-coral px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-coral/20 hover:bg-[#df503c] transition whitespace-nowrap disabled:opacity-50"
+                  >
+                    {sendingPhoneOtp
+                      ? 'Sending...'
+                      : phoneOtpTimer > 0
+                      ? `Resend (${phoneOtpTimer}s)`
+                      : phoneOtpSent
+                      ? 'Resend SMS'
+                      : 'Send SMS OTP'}
+                  </button>
                 )}
               </div>
-              <div className="relative">
-                <input
-                  id="phone"
-                  type="tel"
-                  inputMode="numeric"
-                  value={formData.phone}
-                  onChange={(e) => {
-                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setFormData({ ...formData, phone: digitsOnly });
-                  }}
-                  placeholder="10-digit mobile (e.g. 9876543210)"
-                  maxLength={10}
-                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:ring-4 ${
-                    formData.phone.length === 10
-                      ? validateIndianMobile(formData.phone).isValid
-                        ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20'
-                        : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                      : formData.phone.length > 0 && !/^[6-9]/.test(formData.phone)
-                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                      : 'border-stone-300 focus:border-coral focus:ring-coral/20 dark:border-slate-700'
-                  } dark:bg-[#101820] dark:text-white`}
-                />
-                {formData.phone.length === 10 && validateIndianMobile(formData.phone).isValid && (
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-base">
-                    ✓
-                  </span>
-                )}
-              </div>
-              {formData.phone.length > 0 && (
+
+              {formData.phone.length > 0 && !phoneOtpSent && !phoneOtpVerified && (
                 <p
-                  className={`mt-1.5 text-xs font-semibold ${
+                  className={`text-xs font-semibold ${
                     formData.phone.length === 10 && validateIndianMobile(formData.phone).isValid
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-red-500'
@@ -416,7 +587,7 @@ export const RegistrationPage = () => {
                 >
                   {formData.phone.length === 10
                     ? validateIndianMobile(formData.phone).isValid
-                      ? '✓ Valid 10-digit mobile number'
+                      ? '✓ Valid number. Click "Send SMS OTP" to receive verification code.'
                       : validateIndianMobile(formData.phone).error
                     : !/^[6-9]/.test(formData.phone)
                     ? '⚠️ Mobile number must start with 6, 7, 8, or 9 (starts with 0-5 are invalid).'
@@ -424,6 +595,58 @@ export const RegistrationPage = () => {
                 </p>
               )}
             </div>
+
+            {/* Phone SMS OTP Verification Box */}
+            {phoneOtpSent && (
+              <div className="sm:col-span-2 rounded-2xl bg-coral/5 border border-coral/30 p-4 dark:bg-coral/[0.08] dark:border-coral/40 space-y-2.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-coral" htmlFor="phone-otp">
+                    📱 Enter 6-Digit SMS OTP
+                  </label>
+                  {phoneOtpVerified ? (
+                    <span className="text-xs font-bold text-emerald-500">Verified ✓</span>
+                  ) : phoneOtpTimer > 0 ? (
+                    <span className="text-xs font-bold text-coral">Resend in {phoneOtpTimer}s</span>
+                  ) : null}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    id="phone-otp"
+                    type="text"
+                    inputMode="numeric"
+                    value={phoneOtp}
+                    onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="------"
+                    maxLength={6}
+                    disabled={phoneOtpVerified}
+                    className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-base font-mono font-bold tracking-[0.35em] text-center outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white disabled:opacity-75"
+                  />
+                  {!phoneOtpVerified && (
+                    <button
+                      type="button"
+                      onClick={handleVerifyPhoneOtp}
+                      disabled={verifyingPhoneOtp || phoneOtp.length !== 6}
+                      className="rounded-xl bg-ink text-white dark:bg-slate-700 dark:text-white px-5 py-2 text-xs font-bold transition hover:bg-coral dark:hover:bg-coral whitespace-nowrap disabled:opacity-50"
+                    >
+                      {verifyingPhoneOtp ? 'Verifying...' : 'Verify Code'}
+                    </button>
+                  )}
+                </div>
+                {phoneOtpStatusMsg && (
+                  <p
+                    className={`text-xs font-semibold ${
+                      phoneOtpStatusType === 'success'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : phoneOtpStatusType === 'error'
+                        ? 'text-red-500'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {phoneOtpStatusMsg}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Password */}
             <div>
@@ -437,7 +660,7 @@ export const RegistrationPage = () => {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Create password"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 pr-10 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                   required
                 />
                 <button
@@ -462,7 +685,7 @@ export const RegistrationPage = () => {
                   value={formData.confirm_password}
                   onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
                   placeholder="Confirm password"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 pr-10 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                   required
                 />
                 <button
@@ -476,7 +699,7 @@ export const RegistrationPage = () => {
             </div>
 
             {/* Live Password Checklist */}
-            <div className="sm:col-span-2 rounded-2xl bg-stone-50 dark:bg-[#151f2b] p-3 border border-stone-200 dark:border-slate-700 text-xs">
+            <div className="sm:col-span-2 rounded-2xl bg-stone-50 dark:bg-[#151f2b] p-3.5 border border-stone-200 dark:border-slate-700 text-xs">
               <div className="flex items-center justify-between mb-1.5 font-bold">
                 <span className="text-slate-500 dark:text-slate-400">Password strength</span>
                 <span className={allReqsMet ? 'text-emerald-500' : 'text-coral'}>{metCount}/5 met</span>
@@ -501,6 +724,9 @@ export const RegistrationPage = () => {
               </button>
             </div>
           </form>
+
+          {/* Invisible Firebase reCAPTCHA Container */}
+          <div id="recaptcha-phone-container" className="hidden"></div>
 
           <p className="mt-4 text-center text-xs sm:text-sm text-slate-600 dark:text-slate-400">
             Already have an account?{' '}

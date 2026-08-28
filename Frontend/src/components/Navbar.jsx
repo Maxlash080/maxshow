@@ -38,6 +38,15 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
           <Link className="transition hover:text-coral text-ink dark:text-white" to="/about">
             About us
           </Link>
+          <a
+            className="transition hover:text-coral text-ink dark:text-white"
+            href="https://mail.google.com/mail/?view=cm&fs=1&to=official.maxshow@gmail.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Send email to official.maxshow@gmail.com"
+          >
+            Contact us
+          </a>
         </nav>
 
         <div className="flex items-center gap-2.5 sm:gap-3">

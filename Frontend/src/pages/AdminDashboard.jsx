@@ -773,6 +773,18 @@ export const AdminDashboard = () => {
               </span>
             </div>
 
+            {/* Website Option */}
+            <Link
+              to="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-full border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition shadow-sm dark:border-slate-700 dark:bg-[#101820] dark:text-slate-200 dark:hover:border-coral dark:hover:text-coral"
+              title="Open MAXSHOW Website Home Page to check live events"
+            >
+              <span>🌐</span>
+              <span>Website</span>
+            </Link>
+
             {/* Test Live Trigger Button */}
             <button
               onClick={handleTestLiveAlert}
@@ -901,13 +913,26 @@ export const AdminDashboard = () => {
                 </div>
               </div>
 
-              <button
-                onClick={handleOpenAddEvent}
-                className="flex items-center gap-2 rounded-2xl bg-coral px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#df503c] transition"
-              >
-                <span>＋</span>
-                <span>Add New Event</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-2xl border border-stone-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-200 shadow-sm"
+                  title="Redirect to Website Home Page to view all events"
+                >
+                  <span>🌐</span>
+                  <span>Website</span>
+                </Link>
+
+                <button
+                  onClick={handleOpenAddEvent}
+                  className="flex items-center gap-2 rounded-2xl bg-coral px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#df503c] transition"
+                >
+                  <span>＋</span>
+                  <span>Add New Event</span>
+                </button>
+              </div>
             </div>
 
             {/* Events Grid */}

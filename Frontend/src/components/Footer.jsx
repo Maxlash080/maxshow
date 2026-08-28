@@ -23,6 +23,15 @@ export const Footer = () => {
           <Link className="hover:text-coral transition" to="/about">
             About us
           </Link>
+          <a
+            className="hover:text-coral transition"
+            href="https://mail.google.com/mail/?view=cm&fs=1&to=official.maxshow@gmail.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Send email to official.maxshow@gmail.com"
+          >
+            Contact us
+          </a>
           {isAdmin ? (
             <Link className="hover:text-coral transition" to="/admin-dashboard">
               Dashboard

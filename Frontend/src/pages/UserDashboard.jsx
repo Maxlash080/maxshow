@@ -6,7 +6,7 @@ import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirmModal } from '../context/ModalContext';
-import { formatPrice, formatEventTime } from '../utils/formatters';
+import { formatPrice, formatEventTime, validateIndianMobile } from '../utils/formatters';
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 
 export const UserDashboard = () => {
@@ -89,6 +89,13 @@ export const UserDashboard = () => {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    if (profileForm.phone.trim()) {
+      const phoneValidation = validateIndianMobile(profileForm.phone);
+      if (!phoneValidation.isValid) {
+        showToast(phoneValidation.error);
+        return;
+      }
+    }
     setSavingProfile(true);
     try {
       const payload = {
@@ -684,13 +691,51 @@ export const UserDashboard = () => {
               </div>
 
               <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Phone</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-ink dark:text-slate-200">Phone</label>
+                  {profileForm.phone && (
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {profileForm.phone.length}/10 digits
+                    </span>
+                  )}
+                </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   value={profileForm.phone}
-                  onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setProfileForm({ ...profileForm, phone: digitsOnly });
+                  }}
+                  placeholder="10-digit mobile (e.g. 9876543210)"
+                  maxLength={10}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 font-semibold outline-none transition focus:ring-4 ${
+                    profileForm.phone.length === 10
+                      ? validateIndianMobile(profileForm.phone).isValid
+                        ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : profileForm.phone.length > 0 && !/^[6-9]/.test(profileForm.phone)
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : 'border-stone-300 focus:border-coral focus:ring-coral/20 dark:border-slate-700'
+                  } dark:bg-[#101820] dark:text-white`}
                 />
+                {profileForm.phone.length > 0 && (
+                  <p
+                    className={`mt-1 text-xs font-semibold ${
+                      profileForm.phone.length === 10 && validateIndianMobile(profileForm.phone).isValid
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-500'
+                    }`}
+                  >
+                    {profileForm.phone.length === 10
+                      ? validateIndianMobile(profileForm.phone).isValid
+                        ? '✓ Valid 10-digit mobile number'
+                        : validateIndianMobile(profileForm.phone).error
+                      : !/^[6-9]/.test(profileForm.phone)
+                      ? '⚠️ Mobile number must start with 6, 7, 8, or 9.'
+                      : `Please enter all 10 digits (${profileForm.phone.length}/10 entered)`}
+                  </p>
+                )}
               </div>
 
               <div>

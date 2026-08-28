@@ -67,3 +67,45 @@ export const formatEventTime = (timeStr, day = '') => {
     return str;
   }
 };
+
+/**
+ * Validate Indian Mobile Number (10 digits, starting with 6-9, non-dummy/non-sequential)
+ */
+export const validateIndianMobile = (phone) => {
+  if (!phone) return { isValid: true, error: '' };
+  const clean = String(phone).replace(/\D/g, '');
+  const digits = clean.length === 12 && clean.startsWith('91') ? clean.slice(2) : clean;
+
+  if (digits.length === 0) {
+    return { isValid: true, error: '' };
+  }
+  if (digits.length < 10) {
+    return { isValid: false, error: 'Mobile number must be exactly 10 digits.' };
+  }
+  if (digits.length > 10) {
+    return { isValid: false, error: 'Mobile number cannot exceed 10 digits.' };
+  }
+  if (!/^[6-9]/.test(digits)) {
+    return { isValid: false, error: 'Mobile number must start with 6, 7, 8, or 9.' };
+  }
+  // Check for all identical digits (e.g. 1111111111, 9999999999, 8888888888, 0000000000)
+  if (/^(\d)\1{9}$/.test(digits)) {
+    return { isValid: false, error: 'Please enter a valid mobile number (dummy repeating numbers are not allowed).' };
+  }
+  // Check for 6+ consecutive same digits (e.g. 9999991234)
+  if (/(\d)\1{5,}/.test(digits)) {
+    return { isValid: false, error: 'Please enter a valid mobile number.' };
+  }
+  // Common sequential/dummy patterns
+  const dummyPatterns = [
+    '1234567890', '0123456789', '2345678901', '1234567892', '1234567891',
+    '9876543210', '8765432109', '7654321098', '6543210987',
+    '9898989898', '9191919191', '9090909090', '8989898989', '7878787878', '6767676767'
+  ];
+  if (dummyPatterns.includes(digits)) {
+    return { isValid: false, error: 'Please enter a valid, active mobile number.' };
+  }
+
+  return { isValid: true, error: '', cleanNumber: digits };
+};
+

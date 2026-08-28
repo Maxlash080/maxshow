@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { validateIndianMobile } from '../utils/formatters';
 
 export const RegistrationPage = () => {
   const navigate = useNavigate();
@@ -137,6 +138,14 @@ export const RegistrationPage = () => {
     if (otpSent && !otpVerified) {
       setErrorMessage('Please verify your email with the 6-digit OTP code.');
       return;
+    }
+    if (formData.phone.trim()) {
+      const phoneValidation = validateIndianMobile(formData.phone);
+      if (!phoneValidation.isValid) {
+        setErrorMessage(phoneValidation.error);
+        showToast(phoneValidation.error);
+        return;
+      }
     }
     if (!allReqsMet) {
       setErrorMessage('Password must meet all 5 security requirements.');
@@ -359,18 +368,61 @@ export const RegistrationPage = () => {
 
             {/* Mobile Number */}
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-bold text-ink dark:text-slate-200" htmlFor="phone">
-                Mobile number (optional)
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^\d+]/g, '') })}
-                placeholder="10-digit mobile for ticket SMS"
-                maxLength={13}
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:border-coral focus:ring-4 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-ink dark:text-slate-200" htmlFor="phone">
+                  Mobile number (optional)
+                </label>
+                {formData.phone && (
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {formData.phone.length}/10 digits
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  id="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  value={formData.phone}
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setFormData({ ...formData, phone: digitsOnly });
+                  }}
+                  placeholder="10-digit mobile (e.g. 9876543210)"
+                  maxLength={10}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-semibold outline-none transition focus:ring-4 ${
+                    formData.phone.length === 10
+                      ? validateIndianMobile(formData.phone).isValid
+                        ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : formData.phone.length > 0 && !/^[6-9]/.test(formData.phone)
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : 'border-stone-300 focus:border-coral focus:ring-coral/20 dark:border-slate-700'
+                  } dark:bg-[#101820] dark:text-white`}
+                />
+                {formData.phone.length === 10 && validateIndianMobile(formData.phone).isValid && (
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-base">
+                    ✓
+                  </span>
+                )}
+              </div>
+              {formData.phone.length > 0 && (
+                <p
+                  className={`mt-1.5 text-xs font-semibold ${
+                    formData.phone.length === 10 && validateIndianMobile(formData.phone).isValid
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-red-500'
+                  }`}
+                >
+                  {formData.phone.length === 10
+                    ? validateIndianMobile(formData.phone).isValid
+                      ? '✓ Valid 10-digit mobile number'
+                      : validateIndianMobile(formData.phone).error
+                    : !/^[6-9]/.test(formData.phone)
+                    ? '⚠️ Mobile number must start with 6, 7, 8, or 9 (starts with 0-5 are invalid).'
+                    : `Please enter all 10 digits (${formData.phone.length}/10 entered)`}
+                </p>
+              )}
             </div>
 
             {/* Password */}

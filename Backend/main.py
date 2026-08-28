@@ -329,6 +329,43 @@ class VerifyOtpRequest(BaseModel):
         return clean
 
 
+DUMMY_MOBILE_PATTERNS = {
+    "1234567890", "0123456789", "2345678901", "1234567892", "1234567891",
+    "9876543210", "8765432109", "7654321098", "6543210987",
+    "9898989898", "9191919191", "9090909090", "8989898989", "7878787878", "6767676767"
+}
+
+
+def sanitize_and_validate_mobile(v: str | None, required: bool = False) -> str | None:
+    if v is None:
+        if required:
+            raise ValueError("Mobile number is required.")
+        return None
+    clean = str(v).strip()
+    if not clean:
+        if required:
+            raise ValueError("Mobile number is required.")
+        return None
+    clean_digits = re.sub(r"\D", "", clean)
+    if clean_digits.startswith("91") and len(clean_digits) == 12:
+        clean_digits = clean_digits[2:]
+    if not clean_digits:
+        if required:
+            raise ValueError("Mobile number is required.")
+        return None
+    if len(clean_digits) != 10:
+        raise ValueError("Mobile number must be a valid 10-digit number.")
+    if clean_digits[0] not in ("6", "7", "8", "9"):
+        raise ValueError("Mobile number must start with 6, 7, 8, or 9 (numbers starting with 0-5 are invalid).")
+    if re.match(r"^(\d)\1{9}$", clean_digits):
+        raise ValueError("Please enter a valid mobile number (dummy repeating numbers are not allowed).")
+    if re.search(r"(\d)\1{5,}", clean_digits):
+        raise ValueError("Please enter a valid mobile number.")
+    if clean_digits in DUMMY_MOBILE_PATTERNS:
+        raise ValueError("Please enter a valid, active mobile number.")
+    return clean_digits
+
+
 class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     username: str = Field(min_length=3, max_length=30)
@@ -367,15 +404,7 @@ class RegisterRequest(BaseModel):
     @field_validator("mobile", "phone", "phone_number")
     @classmethod
     def validate_mobile(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        clean = v.strip()
-        if not clean:
-            return None
-        clean_digits = re.sub(r"\D", "", clean)
-        if clean_digits and len(clean_digits) != 10:
-            raise ValueError("Mobile number must be a valid 10-digit number.")
-        return clean_digits or None
+        return sanitize_and_validate_mobile(v, required=False)
 
     @field_validator("email")
     @classmethod
@@ -405,7 +434,7 @@ class UpdateProfileRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     username: str = Field(min_length=3, max_length=30)
     email: str = Field(min_length=3, max_length=150)
-    mobile: str = Field(min_length=10, max_length=15)
+    mobile: str | None = Field(default=None)
 
     @field_validator("full_name")
     @classmethod
@@ -433,13 +462,8 @@ class UpdateProfileRequest(BaseModel):
 
     @field_validator("mobile")
     @classmethod
-    def validate_mobile(cls, v: str) -> str:
-        clean = v.strip()
-        if not clean.isdigit():
-            raise ValueError("Mobile number must contain numbers only (letters are not allowed).")
-        if len(clean) != 10:
-            raise ValueError("Mobile number must be a valid 10-digit number.")
-        return clean
+    def validate_mobile(cls, v: str | None) -> str | None:
+        return sanitize_and_validate_mobile(v, required=False)
 
     @field_validator("email")
     @classmethod

@@ -162,8 +162,8 @@ export const UserDashboard = () => {
     const loc = booking.location || booking.venue || '';
     const time = formatEventTime(booking.time || '', booking.day);
     const ticketsCount = booking.tickets || booking.quantity || 1;
-    const isFree = Number(booking.total || booking.total_amount) === 0;
-    const totalText = isFree ? 'Free entry' : formatPrice(booking.total || booking.total_amount);
+    const isFree = Number(booking.total ?? booking.total_amount ?? 0) === 0 || booking.payment_status === 'Free Entry';
+    const totalText = isFree ? 'Free entry' : formatPrice(booking.total ?? booking.total_amount ?? 0);
     const eventUrl = window.location.origin + `/event/${encodeURIComponent(booking.event_slug || booking.slug || '')}`;
 
     const shareText = `🎟️ MAXSHOW Digital Ticket\n\n🎪 Event: ${title}\n🎫 Booking Ref: #${code}\n📍 Location: ${loc}\n🕒 Date/Time: ${time}\n👥 Reserved: ${ticketsCount} Ticket${ticketsCount > 1 ? 's' : ''}\n💰 Total: ${totalText}\n\n👉 View Experience: ${eventUrl}`;
@@ -198,8 +198,8 @@ export const UserDashboard = () => {
     const loc = booking.location || booking.venue || '';
     const time = formatEventTime(booking.time || '', booking.day);
     const ticketsCount = booking.tickets || booking.quantity || 1;
-    const isFree = Number(booking.total || booking.total_amount) === 0;
-    const totalText = isFree ? 'Free entry' : formatPrice(booking.total || booking.total_amount);
+    const isFree = Number(booking.total ?? booking.total_amount ?? 0) === 0 || booking.payment_status === 'Free Entry';
+    const totalText = isFree ? 'Free entry' : formatPrice(booking.total ?? booking.total_amount ?? 0);
     const eventUrl = window.location.origin + `/event/${encodeURIComponent(booking.event_slug || booking.slug || '')}`;
 
     const text = `🎟️ *MAXSHOW Digital Ticket*\n\n🎪 *Event:* ${title}\n🎫 *Booking Code:* #${code}\n📍 *Venue:* ${loc}\n🕒 *Time:* ${time}\n👥 *Tickets:* ${ticketsCount} Ticket${ticketsCount > 1 ? 's' : ''}\n💰 *Total:* ${totalText}\n\n👉 *View on MAXSHOW:* ${eventUrl}`;
@@ -354,7 +354,7 @@ export const UserDashboard = () => {
             ) : (
               <div className="space-y-4">
                 {bookings.map((b) => {
-                  const isFree = Number(b.total || b.total_amount) === 0;
+                  const isFree = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
                   const timeFormatted = formatEventTime(b.time || '');
                   return (
                     <article
@@ -396,7 +396,7 @@ export const UserDashboard = () => {
                               {b.tickets || b.quantity || 1} ticket{(b.tickets || b.quantity || 1) === 1 ? '' : 's'}
                             </p>
                             <p className="text-sm font-black text-coral">
-                              {isFree ? 'Free entry' : formatPrice(b.total || b.total_amount)}
+                              {isFree ? 'Free entry' : formatPrice(b.total ?? b.total_amount ?? 0)}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -606,9 +606,9 @@ export const UserDashboard = () => {
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Paid</p>
                   <p className="mt-0.5 text-xs font-black text-coral">
-                    {Number(selectedBooking.total || selectedBooking.total_amount) === 0
+                    {Number(selectedBooking.total ?? selectedBooking.total_amount ?? 0) === 0 || selectedBooking.payment_status === 'Free Entry'
                       ? 'Free'
-                      : formatPrice(selectedBooking.total || selectedBooking.total_amount)}
+                      : formatPrice(selectedBooking.total ?? selectedBooking.total_amount ?? 0)}
                   </p>
                 </div>
               </div>

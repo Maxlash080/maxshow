@@ -630,9 +630,9 @@ export const AdminDashboard = () => {
   const filteredBookings = useMemo(() => {
     let result = [...bookings];
     if (bookingTypeFilter === 'paid') {
-      result = result.filter((b) => Number(b.total || b.total_amount) > 0);
+      result = result.filter((b) => Number(b.total ?? b.total_amount ?? 0) > 0 && b.payment_status !== 'Free Entry');
     } else if (bookingTypeFilter === 'free') {
-      result = result.filter((b) => Number(b.total || b.total_amount) === 0);
+      result = result.filter((b) => Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry');
     }
     if (bookingSearch.trim()) {
       const q = bookingSearch.toLowerCase().trim();
@@ -914,17 +914,6 @@ export const AdminDashboard = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <Link
-                  to="/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 rounded-2xl border border-stone-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-200 shadow-sm"
-                  title="Redirect to Website Home Page to view all events"
-                >
-                  <span>🌐</span>
-                  <span>Website</span>
-                </Link>
-
                 <button
                   onClick={handleOpenAddEvent}
                   className="flex items-center gap-2 rounded-2xl bg-coral px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#df503c] transition"
@@ -1177,7 +1166,7 @@ export const AdminDashboard = () => {
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-slate-700">
                   {filteredBookings.map((b) => {
-                    const isFree = Number(b.total || b.total_amount) === 0;
+                    const isFree = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
                     return (
                       <tr key={b.id || b.booking_code} className="hover:bg-stone-50/50 dark:hover:bg-slate-800/50 transition">
                         <td className="px-5 py-4 font-mono font-bold text-coral">{b.booking_code || `BKG-${b.id}`}</td>
@@ -1190,7 +1179,7 @@ export const AdminDashboard = () => {
                         </td>
                         <td className="px-5 py-4 font-bold">{b.quantity || b.tickets || 1}</td>
                         <td className="px-5 py-4 font-bold text-ink dark:text-white">
-                          {isFree ? 'Free entry' : formatPrice(b.total || b.total_amount)}
+                          {isFree ? 'Free entry' : formatPrice(b.total ?? b.total_amount ?? 0)}
                         </td>
                         <td className="px-5 py-4">
                           <span
@@ -1318,7 +1307,7 @@ export const AdminDashboard = () => {
                 <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Total Spent</p>
                 <p className="font-black text-coral text-base mt-0.5">
                   {formatPrice(
-                    userBookings.reduce((sum, b) => sum + (Number(b.total || b.total_amount) || 0), 0) || selectedUser.total_spent || 0
+                    userBookings.reduce((sum, b) => sum + (Number(b.total ?? b.total_amount ?? 0) || 0), 0) || selectedUser.total_spent || 0
                   )}
                 </p>
                 <span className="text-[10px] text-slate-400">Cumulative spend</span>
@@ -1350,45 +1339,48 @@ export const AdminDashboard = () => {
                 </div>
               ) : (
                 <div className="max-h-56 overflow-y-auto space-y-2.5 no-scrollbar pr-1">
-                  {userBookings.map((b) => (
-                    <div
-                      key={b.id || b.booking_code}
-                      className="rounded-2xl border border-stone-200/90 p-3.5 text-xs dark:border-slate-700/80 dark:bg-[#151f2b] shadow-sm space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-black text-sm text-ink dark:text-white">{b.title || b.event_title || 'Experience'}</p>
-                          <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
-                            📍 {b.location || 'MAXSHOW Venue'} {b.time ? `· 🕒 ${b.time}` : ''}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase whitespace-nowrap ${
-                            b.payment_status === 'Free Entry'
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
-                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                          }`}
-                        >
-                          {b.payment_status || (b.total === 0 ? 'Free Entry' : 'Paid')}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-stone-100 pt-2 dark:border-slate-800 text-[11px]">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono font-bold text-coral">#{b.booking_code || b.booking_id || `BKG-${b.id}`}</span>
-                          <span className="font-bold text-slate-600 dark:text-slate-300">
-                            {b.tickets || b.quantity || 1} pass{b.tickets > 1 ? 'es' : ''} · {b.total === 0 ? 'Free' : formatPrice(b.total || b.total_amount)}
+                  {userBookings.map((b) => {
+                    const isFreeBooking = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
+                    return (
+                      <div
+                        key={b.id || b.booking_code}
+                        className="rounded-2xl border border-stone-200/90 p-3.5 text-xs dark:border-slate-700/80 dark:bg-[#151f2b] shadow-sm space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-black text-sm text-ink dark:text-white">{b.title || b.event_title || 'Experience'}</p>
+                            <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                              📍 {b.location || 'MAXSHOW Venue'} {b.time ? `· 🕒 ${b.time}` : ''}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase whitespace-nowrap ${
+                              isFreeBooking
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                            }`}
+                          >
+                            {isFreeBooking ? 'Free Entry' : b.payment_status || 'Paid'}
                           </span>
                         </div>
-                        <button
-                          onClick={() => handleCancelBooking(b)}
-                          className="font-bold text-red-500 hover:text-red-700 dark:hover:text-red-400 transition"
-                        >
-                          Cancel
-                        </button>
+
+                        <div className="flex items-center justify-between border-t border-stone-100 pt-2 dark:border-slate-800 text-[11px]">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-coral">#{b.booking_code || b.booking_id || `BKG-${b.id}`}</span>
+                            <span className="font-bold text-slate-600 dark:text-slate-300">
+                              {b.tickets || b.quantity || 1} pass{b.tickets > 1 ? 'es' : ''} · {isFreeBooking ? 'Free' : formatPrice(b.total ?? b.total_amount ?? 0)}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleCancelBooking(b)}
+                            className="font-bold text-red-500 hover:text-red-700 dark:hover:text-red-400 transition"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

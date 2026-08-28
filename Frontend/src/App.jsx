@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 
 import { HomePage } from './pages/HomePage';
 import { UserSignInPage } from './pages/UserSignInPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { RegistrationPage } from './pages/RegistrationPage';
 import { AdminSignInPage } from './pages/AdminSignInPage';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -31,6 +32,9 @@ export const App = () => {
               <Route path="/user" element={<UserSignInPage />} />
               <Route path="/user.html" element={<UserSignInPage />} />
               <Route path="/login" element={<UserSignInPage />} />
+
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/forgot-password.html" element={<ForgotPasswordPage />} />
 
               <Route path="/registration" element={<RegistrationPage />} />
               <Route path="/registration.html" element={<RegistrationPage />} />

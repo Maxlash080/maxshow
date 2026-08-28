@@ -52,36 +52,96 @@ SMTP_FROM_NAME = "MAXSHOW Events"
 otp_cache: dict[str, dict] = {}
 
 
-def send_otp_email(to_email: str, otp_code: str) -> bool:
-    subject = f"{otp_code} is your MAXSHOW verification code"
+def send_otp_email(to_email: str, otp_code: str, purpose: str = "register") -> bool:
+    if purpose == "reset_password":
+        subject = f"{otp_code} is your MAXSHOW Password Reset Code"
+        heading = "Reset your password"
+        intro_text = "Use the 6-digit verification code below to verify your identity and reset your MAXSHOW account password."
+        action_url = "https://maxshow.site/forgot-password"
+    else:
+        subject = f"{otp_code} is your MAXSHOW Verification Code"
+        heading = "Verify your email address"
+        intro_text = "Use the 6-digit verification code below to complete creating your MAXSHOW account."
+        action_url = "https://maxshow.site/registration"
+
+    # Space the 6 digits (e.g. 3 5 0 2 6 3) for clean monospace rendering
+    spaced_otp = " ".join(otp_code) if len(otp_code) == 6 else otp_code
 
     html_body = f"""
     <!DOCTYPE html>
     <html>
-    <head><meta charset="utf-8"></head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #FFF9F2; margin: 0; padding: 24px; color: #17202A;">
-      <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 36px 28px; border: 1px solid #e7e5e4; box-shadow: 0 4px 20px rgba(0,0,0,0.04);">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
-          <div style="width: 42px; height: 42px; border-radius: 14px; background: #F2634E; color: #ffffff; font-size: 22px; font-weight: 900; line-height: 42px; text-align: center;">M</div>
-          <span style="font-size: 20px; font-weight: 900; letter-spacing: -0.5px; color: #17202A;">MAXSHOW</span>
-        </div>
-        <h2 style="font-size: 22px; font-weight: 900; color: #17202A; margin: 0 0 10px;">Verify your email address</h2>
-        <p style="font-size: 14px; line-height: 1.6; color: #64748b; margin: 0 0 24px;">
-          Use the 6-digit verification code below to complete creating your MAXSHOW account.
-        </p>
-        <div style="background: #FFF2EE; border: 2px dashed #F2634E; border-radius: 18px; padding: 20px; text-align: center; margin: 0 0 24px;">
-          <span style="font-family: monospace; font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #F2634E;">{otp_code}</span>
-        </div>
-        <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin: 0;">
-          ⏰ This code will expire in <strong>5 minutes</strong>.<br>
-          If you didn't request this verification code, you can safely ignore this email.
-        </p>
-      </div>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>{heading}</title>
+    </head>
+    <body style="margin: 0; padding: 32px 16px; background-color: #0f1318; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #ffffff;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 480px; margin: 0 auto; background-color: #171c24; border-radius: 28px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); overflow: hidden;">
+        <tr>
+          <td style="padding: 36px 30px;">
+            <!-- Brand Header -->
+            <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+              <tr>
+                <td style="width: 38px; height: 38px; background-color: #F2634E; border-radius: 50%; text-align: center; vertical-align: middle;">
+                  <span style="color: #ffffff; font-size: 18px; font-weight: 900; line-height: 38px; display: inline-block;">M</span>
+                </td>
+                <td style="padding-left: 12px;">
+                  <span style="font-size: 18px; font-weight: 900; letter-spacing: 0.5px; color: #ffffff; vertical-align: middle;">MAXSHOW</span>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Heading -->
+            <h1 style="font-size: 24px; font-weight: 800; color: #ffffff; margin: 0 0 12px 0; letter-spacing: -0.4px; line-height: 1.25;">
+              {heading}
+            </h1>
+
+            <!-- Intro text -->
+            <p style="font-size: 14px; line-height: 1.6; color: #94a3b8; margin: 0 0 24px 0;">
+              {intro_text}
+            </p>
+
+            <!-- OTP Box -->
+            <div style="background-color: #261616; border: 1.5px dashed #F2634E; border-radius: 20px; padding: 22px 16px; text-align: center; margin: 0 0 22px 0;">
+              <span style="font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; font-size: 36px; font-weight: 900; letter-spacing: 6px; color: #F2634E; display: inline-block;">
+                {spaced_otp}
+              </span>
+            </div>
+
+            <!-- Expiry & Disclaimer -->
+            <p style="font-size: 12px; font-weight: 700; color: #F2634E; margin: 0 0 6px 0; line-height: 1.4;">
+              ⏰ This code will expire in 5 minutes.
+            </p>
+            <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 0 0 26px 0;">
+              If you didn't request this verification code, you can safely ignore this email.
+            </p>
+
+            <!-- Action Buttons -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td style="padding-bottom: 12px;">
+                  <a href="{action_url}" target="_blank" rel="noopener noreferrer" style="display: block; width: 100%; box-sizing: border-box; background-color: #F2634E; color: #ffffff; text-decoration: none; text-align: center; font-weight: 700; font-size: 14px; padding: 13px 20px; border-radius: 14px;">
+                    Go to MAXSHOW App to enter code
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <a href="{action_url}" target="_blank" rel="noopener noreferrer" style="display: block; width: 100%; box-sizing: border-box; background-color: transparent; border: 1px solid rgba(242, 99, 78, 0.4); color: #F2634E; text-decoration: none; text-align: center; font-weight: 700; font-size: 14px; padding: 12px 20px; border-radius: 14px;">
+                    Request a new code
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     """
 
-    text_body = f"Your MAXSHOW verification code is: {otp_code}. It will expire in 5 minutes."
+    text_body = f"{heading}\n\n{intro_text}\n\nYour 6-digit verification code is: {otp_code}\n(This code will expire in 5 minutes)\n\nEnter your code here: {action_url}"
 
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -405,6 +465,50 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_mobile(cls, v: str | None) -> str | None:
         return sanitize_and_validate_mobile(v, required=False)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        clean = v.strip().lower()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
+            raise ValueError("Please enter a valid email address.")
+        return clean
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter (A-Z).")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter (a-z).")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("Password must contain at least one number (0-9).")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\\/~`]", v):
+            raise ValueError("Password must contain at least one special character (!@#$%^&*).")
+        return v
+
+
+class ForgotPasswordOtpRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=60)
+    email: str = Field(min_length=3, max_length=150)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        clean = v.strip().lower()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
+            raise ValueError("Please enter a valid email address.")
+        return clean
+
+
+class ResetPasswordRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=60)
+    email: str = Field(min_length=3, max_length=150)
+    otp: str = Field(min_length=4, max_length=10)
+    password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
 
     @field_validator("email")
     @classmethod
@@ -1140,6 +1244,146 @@ def verify_otp(payload: VerifyOtpRequest) -> dict:
 
     record["verified"] = True
     return {"message": "Email verified successfully!"}
+
+
+@app.post("/api/auth/forgot-password/send-otp")
+def forgot_password_send_otp(payload: ForgotPasswordOtpRequest, db: Session = Depends(get_db)) -> dict:
+    clean_username = payload.username.strip().lower()
+    clean_email = str(payload.email).strip().lower()
+
+    # Verify both username AND email match the exact same account in the database
+    user = db.query(User).filter(
+        func.lower(User.username) == clean_username,
+        func.lower(User.email) == clean_email,
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found matching this username and email address. Please check your credentials.",
+        )
+
+    # Generate secure 6-digit numeric OTP
+    otp = f"{secrets.randbelow(900000) + 100000}"
+    expires_at = time.time() + (5 * 60) # 5 mins
+
+    sent = send_otp_email(clean_email, otp, purpose="reset_password")
+    if not sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send password reset code. Please check your email address and try again.",
+        )
+
+    cache_key = f"reset:{clean_email}"
+    otp_cache[cache_key] = {
+        "otp": otp,
+        "expires_at": expires_at,
+        "verified": False,
+        "username": clean_username,
+        "user_id": user.id,
+    }
+
+    print(f"[OTP LOG] Password Reset OTP for {clean_username} ({clean_email}): {otp}")
+
+    return {
+        "message": f"Password reset verification code sent to {clean_email}.",
+        "email": clean_email,
+        "username": user.username,
+        "smtp_sent": True,
+    }
+
+
+@app.post("/api/auth/forgot-password/verify-otp")
+def forgot_password_verify_otp(payload: VerifyOtpRequest) -> dict:
+    clean_email = payload.email.strip().lower()
+    user_otp = payload.otp.strip()
+
+    cache_key = f"reset:{clean_email}"
+    record = otp_cache.get(cache_key) or otp_cache.get(clean_email)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active password reset request found for this email. Please click 'Send OTP' first.",
+        )
+
+    if time.time() > record.get("expires_at", 0):
+        otp_cache.pop(cache_key, None)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please request a new code.",
+        )
+
+    if record.get("otp") != user_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code. Please check your Gmail or request a new code.",
+        )
+
+    record["verified"] = True
+    return {"message": "Verification code confirmed successfully!"}
+
+
+@app.post("/api/auth/forgot-password/reset")
+def forgot_password_reset(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict:
+    clean_username = payload.username.strip().lower()
+    clean_email = str(payload.email).strip().lower()
+    user_otp = payload.otp.strip()
+
+    if payload.password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match.",
+        )
+
+    cache_key = f"reset:{clean_email}"
+    record = otp_cache.get(cache_key) or otp_cache.get(clean_email)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please request a verification code first.",
+        )
+
+    if time.time() > record.get("expires_at", 0):
+        otp_cache.pop(cache_key, None)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please request a new code.",
+        )
+
+    if record.get("otp") != user_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code.",
+        )
+
+    # Find user matching both username AND email
+    user = db.query(User).filter(
+        func.lower(User.username) == clean_username,
+        func.lower(User.email) == clean_email,
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found matching this username and email address.",
+        )
+
+    # Update password in database
+    user.password = hash_password(payload.password)
+    db.commit()
+
+    # Clear OTP from cache
+    otp_cache.pop(cache_key, None)
+    otp_cache.pop(clean_email, None)
+
+    # Invalidate existing active sessions for security
+    for token, uid in list(active_sessions.items()):
+        if uid == user.id:
+            active_sessions.pop(token, None)
+
+    return {
+        "message": "Password changed successfully! Please sign in with your new password.",
+    }
 
 
 @app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)

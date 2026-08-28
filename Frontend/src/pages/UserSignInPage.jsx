@@ -171,7 +171,9 @@ export const UserSignInPage = () => {
                 <label className="text-xs sm:text-sm font-bold text-ink dark:text-slate-200" htmlFor="password">
                   Password
                 </label>
-                <a className="text-xs font-bold text-coral hover:underline" href="mailto:official.maxshow@gmail.com?subject=MAXSHOW%20Password%20Reset%20Request">Forgot password?</a>
+                <Link to="/forgot-password" className="text-xs font-bold text-coral hover:underline">
+                  Forgot password?
+                </Link>
               </div>
               <div className="relative">
                 <input

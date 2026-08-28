@@ -2,10 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LOCATIONS } from '../utils/constants';
 import { useToast } from '../context/ToastContext';
 
-export const LocationPicker = ({ currentLocation, onLocationChange }) => {
+export const LocationPicker = ({
+  currentLocation,
+  onLocationChange,
+  availableLocations = [],
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { showToast } = useToast();
+
+  const locationsList = availableLocations.length > 0 ? availableLocations : LOCATIONS;
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -27,7 +33,7 @@ export const LocationPicker = ({ currentLocation, onLocationChange }) => {
     <div className="relative hidden sm:block" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold dark:border-slate-700 dark:bg-[#1c2733] dark:text-white hover:border-coral transition"
+        className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold dark:border-slate-700 dark:bg-[#1c2733] dark:text-white hover:border-coral transition shadow-sm"
         type="button"
         aria-expanded={isOpen}
       >
@@ -39,19 +45,22 @@ export const LocationPicker = ({ currentLocation, onLocationChange }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 z-50 w-48 rounded-2xl border border-stone-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in duration-150">
-          {LOCATIONS.map((loc) => (
+        <div className="absolute right-0 mt-2 z-50 w-52 rounded-2xl border border-stone-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in duration-150 max-h-60 overflow-y-auto">
+          {locationsList.map((loc) => (
             <button
               key={loc}
               onClick={() => handleSelect(loc)}
-              className={`w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
+              className={`w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition flex items-center justify-between ${
                 currentLocation === loc
-                  ? 'bg-coral text-white'
+                  ? 'bg-coral text-white font-bold'
                   : 'hover:bg-cream dark:text-white dark:hover:bg-[#283747]'
               }`}
               type="button"
             >
-              {loc}
+              <span>{loc}</span>
+              {currentLocation === loc && (
+                <span className="text-xs">✓</span>
+              )}
             </button>
           ))}
         </div>

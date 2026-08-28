@@ -5,7 +5,7 @@ import { HeroShowcase } from '../components/HeroShowcase';
 import { EventCard } from '../components/EventCard';
 import { FilterModal } from '../components/FilterModal';
 import { apiRequest } from '../utils/api';
-import { FALLBACK_EVENTS, LOCATIONS } from '../utils/constants';
+import { FALLBACK_EVENTS, LOCATIONS, AREA_OPTIONS } from '../utils/constants';
 import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 
@@ -36,7 +36,7 @@ const QUICK_FILTERS = [
 export const HomePage = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState(Object.values(FALLBACK_EVENTS));
-  const [currentLocation, setCurrentLocation] = useState('Pimpri-Chinchwad');
+  const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0] || 'Hinjawadi');
   const [activeQuickFilter, setActiveQuickFilter] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -183,9 +183,64 @@ export const HomePage = () => {
     };
   }, []);
 
+  // Derive available locations dynamically from active events that actually have events
+  const activeLocations = useMemo(() => {
+    const locMap = new Map(); // normalized -> displayName
+    
+    events.forEach((e) => {
+      const raw = (e.location || e.venue || '').trim();
+      if (!raw) return;
+
+      // Match against AREA_OPTIONS
+      const matched = AREA_OPTIONS.find((area) => {
+        const cleanArea = area.toLowerCase().replace(/,\s*pune$/i, '').trim();
+        const cleanRaw = raw.toLowerCase().trim();
+        return cleanRaw.includes(cleanArea) || cleanArea.includes(cleanRaw);
+      });
+
+      if (matched) {
+        const shortName = matched.replace(/,\s*Pune$/i, '').trim();
+        locMap.set(shortName.toLowerCase(), shortName);
+      } else {
+        const cleanRawName = raw.split(',')[0].trim();
+        if (cleanRawName) {
+          locMap.set(cleanRawName.toLowerCase(), cleanRawName);
+        }
+      }
+    });
+
+    if (locMap.size === 0) {
+      return ['Hinjawadi'];
+    }
+
+    // Sort according to AREA_OPTIONS priority
+    const sorted = Array.from(locMap.values()).sort((a, b) => {
+      const idxA = AREA_OPTIONS.findIndex(opt => opt.toLowerCase().includes(a.toLowerCase()));
+      const idxB = AREA_OPTIONS.findIndex(opt => opt.toLowerCase().includes(b.toLowerCase()));
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    return sorted;
+  }, [events]);
+
+  // Keep currentLocation synced to first available active location if needed
+  useEffect(() => {
+    if (activeLocations.length > 0) {
+      const exists = activeLocations.some(
+        (loc) => loc.toLowerCase() === currentLocation.toLowerCase()
+      );
+      if (!exists) {
+        setCurrentLocation(activeLocations[0]);
+      }
+    }
+  }, [activeLocations, currentLocation]);
+
   // Filtered Events for "Location Picks" section
   const locationPicks = useMemo(() => {
-    const clean = currentLocation.toLowerCase().trim();
+    const clean = currentLocation.toLowerCase().replace(/,\s*pune$/i, '').trim();
     let matched = events.filter((e) => {
       const loc = (e.location || '').toLowerCase();
       const ven = (e.venue || '').toLowerCase();
@@ -353,7 +408,11 @@ export const HomePage = () => {
         </div>
       )}
 
-      <Navbar currentLocation={currentLocation} onLocationChange={setCurrentLocation} />
+      <Navbar
+        currentLocation={currentLocation}
+        onLocationChange={setCurrentLocation}
+        availableLocations={activeLocations}
+      />
 
       <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-12 flex-1">
         {/* Hero Section */}

@@ -3,13 +3,12 @@
  */
 
 export const LOCATIONS = [
-  'Pimpri-Chinchwad',
+  'Hinjawadi',
   'Pimpri',
   'Chinchwad',
-  'Hinjawadi',
-  'Punawale',
   'Kasarwadi',
   'Nigdi',
+  'Punawale',
   'Aundh',
 ];
 
@@ -17,8 +16,8 @@ export const AREA_OPTIONS = [
   'Hinjawadi, Pune',
   'Pimpri, Pune',
   'Chinchwad, Pune',
-  'Kasarwadi, Pimpri-Chinchwad',
-  'Nigdi, Pimpri-Chinchwad',
+  'Kasarwadi, Pune',
+  'Nigdi, Pune',
   'Punawale, Pune',
   'Aundh, Pune',
   'Baner, Pune',
@@ -31,7 +30,6 @@ export const AREA_OPTIONS = [
   'Kalyani Nagar, Pune',
   'Hadapsar, Pune',
   'Shivajinagar, Pune',
-  'Pune',
 ];
 
 export const EVENT_CATEGORIES = [
@@ -44,7 +42,7 @@ export const EVENT_CATEGORIES = [
   { id: 'fests', name: 'Fests & Fairs', icon: '🎡' },
   { id: 'social', name: 'Social Mixers', icon: '✨' },
   { id: 'outdoors', name: 'Outdoors', icon: '🏕️' },
-  { id: 'create', name: 'Workshops', icon: '🎨' },
+  { id: 'create', name: 'Workshops & Art', icon: '🎨' },
   { id: 'screenings', name: 'Screenings', icon: '🎬' },
   { id: 'pets', name: 'Pets', icon: '🐾' },
 ];
@@ -60,11 +58,11 @@ export const FALLBACK_EVENTS = {
     location: 'Hinjawadi, Pune',
     price: 499,
     image: 'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=85',
-    description: 'An open-air evening under string lights with curated vinyl records, artisan picnic bites, and golden sunset views across Hinjawadi.',
+    description: 'An open-air evening under string lights with curated vinyl records, artisan picnic bites, and golden sunset views across Hinjawadi. Bring a blanket or grab one of ours.',
     category: 'outdoors',
     day: 'today',
-    rating: 4.8,
-    rating_count: 42,
+    rating: 4.9,
+    rating_count: 28,
   },
   'blue-room': {
     id: 2,
@@ -73,7 +71,7 @@ export const FALLBACK_EVENTS = {
     type: 'Live music',
     venue: 'The Blue Room · Kasarwadi',
     time: 'Friday, 7:30 PM',
-    location: 'Kasarwadi, Pimpri-Chinchwad',
+    location: 'Kasarwadi, Pune',
     price: 399,
     image: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85',
     description: 'Settle into an intimate evening of unplugged originals, soft lights, and a carefully curated local line-up. Come early, grab a seat, and discover a new favourite voice.',
@@ -89,7 +87,7 @@ export const FALLBACK_EVENTS = {
     type: 'Comedy',
     venue: 'Laugh Lane · Nigdi',
     time: 'Saturday, 8:00 PM',
-    location: 'Nigdi, Pimpri-Chinchwad',
+    location: 'Nigdi, Pune',
     price: 299,
     image: 'https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=85',
     description: 'A relaxed late-night set featuring sharp new comics and seasoned crowd favourites. Bring friends, enjoy the room, and expect a few surprises.',

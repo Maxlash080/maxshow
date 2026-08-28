@@ -8,6 +8,8 @@ import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { AreaDropdown } from '../components/AreaDropdown';
+import { CustomDatePicker } from '../components/CustomDatePicker';
+import { CustomTimePicker } from '../components/CustomTimePicker';
 
 export const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -1487,22 +1489,20 @@ export const AdminDashboard = () => {
 
               <div>
                 <label className="mb-1 block font-bold text-ink dark:text-slate-200">Date</label>
-                <input
-                  type="date"
+                <CustomDatePicker
                   value={eventFormData.date}
-                  onChange={(e) => setEventFormData({ ...eventFormData, date: e.target.value })}
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  onChange={(val) => setEventFormData({ ...eventFormData, date: val })}
+                  placeholder="Select event date"
                   required
                 />
               </div>
 
               <div>
                 <label className="mb-1 block font-bold text-ink dark:text-slate-200">Time</label>
-                <input
-                  type="time"
+                <CustomTimePicker
                   value={eventFormData.clock}
-                  onChange={(e) => setEventFormData({ ...eventFormData, clock: e.target.value })}
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  onChange={(val) => setEventFormData({ ...eventFormData, clock: val })}
+                  placeholder="Select event time"
                   required
                 />
               </div>

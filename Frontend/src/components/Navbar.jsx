@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LocationPicker } from './LocationPicker';
 
-export const Navbar = ({ currentLocation, onLocationChange }) => {
+export const Navbar = ({ currentLocation, onLocationChange, availableLocations }) => {
   const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const location = useLocation();
 
@@ -45,7 +45,11 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
         {/* Right Side: Actions & Profile */}
         <div className="flex items-center gap-2.5 sm:gap-3">
           {onLocationChange && (
-            <LocationPicker currentLocation={currentLocation} onLocationChange={onLocationChange} />
+            <LocationPicker
+              currentLocation={currentLocation}
+              onLocationChange={onLocationChange}
+              availableLocations={availableLocations}
+            />
           )}
 
           {isAuthenticated ? (

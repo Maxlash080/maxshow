@@ -22,9 +22,14 @@ export const BookingPage = () => {
   const [processing, setProcessing] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  // Guest inputs if unauthenticated
-  const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
+  // If user is not authenticated, redirect directly to Login page with redirect back
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      const redirectTarget = `/booking?event=${encodeURIComponent(slug)}&quantity=${quantity}`;
+      showToast('Please sign in to book tickets.');
+      navigate(`/user?redirect=${encodeURIComponent(redirectTarget)}`, { replace: true });
+    }
+  }, [authLoading, isAuthenticated, slug, quantity, navigate, showToast]);
 
   useEffect(() => {
     apiRequest(`/api/events/${encodeURIComponent(slug)}`)
@@ -47,8 +52,9 @@ export const BookingPage = () => {
   const timeFormatted = formatEventTime(event.time || '', event.day);
 
   const handleConfirmBooking = async () => {
-    if (!isAuthenticated && (!guestName.trim() || !guestEmail.trim())) {
-      showToast('Please enter your name and email to proceed.');
+    if (!isAuthenticated) {
+      const redirectTarget = `/booking?event=${encodeURIComponent(slug)}&quantity=${quantity}`;
+      navigate(`/user?redirect=${encodeURIComponent(redirectTarget)}`);
       return;
     }
 
@@ -62,11 +68,11 @@ export const BookingPage = () => {
       time: event.time || 'TBA',
       price: unitPrice,
       quantity,
-      guest_name: !isAuthenticated ? guestName.trim() : (user?.name || ''),
-      guest_email: !isAuthenticated ? guestEmail.trim() : (user?.email || ''),
+      guest_name: user?.name || '',
+      guest_email: user?.email || '',
       guest_phone: user?.phone || '',
-      name: !isAuthenticated ? guestName.trim() : (user?.name || ''),
-      email: !isAuthenticated ? guestEmail.trim() : (user?.email || ''),
+      name: user?.name || '',
+      email: user?.email || '',
       phone: user?.phone || '',
     };
 
@@ -117,8 +123,8 @@ export const BookingPage = () => {
         image: '/logo.png',
         order_id: orderData.order_id,
         prefill: {
-          name: isAuthenticated ? user.name : guestName,
-          email: isAuthenticated ? user.email : guestEmail,
+          name: user?.name || '',
+          email: user?.email || '',
           contact: user?.phone || '',
         },
         theme: {
@@ -167,6 +173,23 @@ export const BookingPage = () => {
       setProcessing(false);
     }
   };
+
+  if (authLoading || (!isAuthenticated && !confirmedBooking)) {
+    return (
+      <div className="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white flex flex-col justify-between">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center space-y-3">
+            <span className="h-8 w-8 inline-block rounded-full border-4 border-coral border-t-transparent animate-spin"></span>
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+              Redirecting to sign in...
+            </p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white flex flex-col">
@@ -229,7 +252,7 @@ export const BookingPage = () => {
         ) : (
           /* Checkout Summary & Confirmation */
           <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr]">
-            {/* Left: Booking Details Form */}
+            {/* Left: Attendee Details */}
             <div className="space-y-6">
               <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-soft dark:bg-[#1c2733] border border-stone-200/80 dark:border-slate-700 space-y-6">
                 <div>
@@ -237,50 +260,20 @@ export const BookingPage = () => {
                   <h2 className="mt-1 text-2xl font-black text-ink dark:text-white">Ticket Holder</h2>
                 </div>
 
-                {isAuthenticated ? (
-                  <div className="flex items-center gap-3.5 rounded-2xl bg-stone-50 p-4 dark:bg-[#151f2b] border border-stone-200 dark:border-slate-700">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral text-base font-black text-white">
-                      {user?.name?.charAt(0)?.toUpperCase()}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-ink dark:text-white">{user?.name}</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {user?.email} {user?.phone ? `· ${user?.phone}` : ''}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-4 rounded-2xl bg-stone-50 p-4 dark:bg-[#151f2b] border border-stone-200 dark:border-slate-700 shadow-sm">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-coral text-base font-black text-white shadow-sm">
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-ink dark:text-slate-200">Full Name *</label>
-                      <input
-                        type="text"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        placeholder="Your full name"
-                        className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-ink dark:text-slate-200">Email Address *</label>
-                      <input
-                        type="email"
-                        value={guestEmail}
-                        onChange={(e) => setGuestEmail(e.target.value)}
-                        placeholder="For digital QR tickets"
-                        className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                        required
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Already have an account?{' '}
-                      <Link to={`/user?redirect=/booking?event=${slug}&quantity=${quantity}`} className="font-bold text-coral hover:underline">
-                        Sign in to sync your ticket
-                      </Link>
+                  <div>
+                    <h4 className="font-bold text-ink dark:text-white text-base">{user?.name}</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {user?.email} {user?.phone ? `· +91 ${user?.phone}` : ''}
                     </p>
+                    <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                      ✓ Verified Account Holder
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
@@ -289,45 +282,48 @@ export const BookingPage = () => {
               <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-soft dark:bg-[#1c2733] border border-stone-200/80 dark:border-slate-700 space-y-6">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-coral">Order Summary</p>
-                  <h3 className="mt-1 text-2xl font-black text-ink dark:text-white">{event.title}</h3>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                    📍 {event.venue || event.location} {timeFormatted ? `· 🕒 ${timeFormatted}` : ''}
+                  <h3 className="mt-1 text-xl sm:text-2xl font-black text-ink dark:text-white">{event.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    📍 {event.venue || event.location} · 🕒 {timeFormatted}
                   </p>
                 </div>
 
-                <div className="space-y-3 border-t border-stone-100 pt-4 dark:border-slate-700 text-xs sm:text-sm">
-                  <div className="flex justify-between font-semibold text-slate-600 dark:text-slate-300">
-                    <span>Ticket Quantity</span>
-                    <span>{quantity}x pass{quantity > 1 ? 'es' : ''}</span>
+                <div className="divide-y divide-stone-100 dark:divide-slate-700 text-xs sm:text-sm">
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Ticket Quantity</span>
+                    <span className="font-bold text-ink dark:text-white">{quantity}x pass{quantity > 1 ? 'es' : ''}</span>
                   </div>
-                  <div className="flex justify-between font-semibold text-slate-600 dark:text-slate-300">
-                    <span>Price per ticket</span>
-                    <span>{formatPrice(unitPrice)}</span>
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Price per ticket</span>
+                    <span className="font-bold text-ink dark:text-white">{formatPrice(unitPrice)}</span>
                   </div>
-                  <div className="flex justify-between font-semibold text-slate-600 dark:text-slate-300">
-                    <span>Booking Fee</span>
-                    <span className="text-emerald-600 dark:text-emerald-400">₹0 (Waived)</span>
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-slate-500 dark:text-slate-400">Booking Fee</span>
+                    <span className="font-bold text-emerald-600">₹0 (Waived)</span>
                   </div>
-                  <div className="flex justify-between text-base font-black text-ink dark:text-white pt-3 border-t border-stone-100 dark:border-slate-700">
+                  <div className="flex justify-between pt-4 text-base font-black text-ink dark:text-white">
                     <span>Total</span>
-                    <span className="text-coral">{isFree ? 'Free Entry' : formatPrice(totalPrice)}</span>
+                    <span className="text-coral">{isFree ? 'Free entry' : formatPrice(totalPrice)}</span>
                   </div>
                 </div>
 
                 <button
                   disabled={processing}
                   onClick={handleConfirmBooking}
-                  className="w-full rounded-2xl bg-coral py-3.5 text-base font-bold text-white shadow-lg shadow-coral/25 transition hover:bg-[#df503c] disabled:opacity-50"
+                  className="w-full rounded-2xl bg-coral py-4 text-sm sm:text-base font-bold text-white shadow-lg shadow-coral/25 hover:bg-[#df503c] transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  {processing
-                    ? 'Processing Order...'
-                    : isFree
-                    ? 'Confirm Free Pass →'
-                    : `Pay ${formatPrice(totalPrice)} with Razorpay →`}
+                  {processing ? (
+                    'Processing booking...'
+                  ) : isFree ? (
+                    'Claim Free Pass →'
+                  ) : (
+                    `Pay ${formatPrice(totalPrice)} with Razorpay →`
+                  )}
                 </button>
 
-                <p className="text-center text-[11px] text-slate-400">
-                  🔒 Verified &amp; Secured with 256-bit SSL encryption.
+                <p className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
+                  <span>🔒</span>
+                  <span>Verified &amp; Secured with 256-bit SSL encryption.</span>
                 </p>
               </div>
             </div>

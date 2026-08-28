@@ -13,7 +13,7 @@ export const EventDetailsPage = () => {
   const { slug: routeSlug } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { bookmarkedIds, toggleBookmark } = useAuth();
+  const { isAuthenticated, bookmarkedIds, toggleBookmark } = useAuth();
   const { showToast } = useToast();
 
   const slug = routeSlug || searchParams.get('event') || 'moonlight-picnic';
@@ -50,7 +50,13 @@ export const EventDetailsPage = () => {
   const type = event.type || event.event_type || 'Experience';
 
   const handleProceedBooking = () => {
-    navigate(`/booking?event=${encodeURIComponent(slug)}&quantity=${quantity}`);
+    const bookingUrl = `/booking?event=${encodeURIComponent(slug)}&quantity=${quantity}`;
+    if (!isAuthenticated) {
+      showToast('Please sign in to book tickets.');
+      navigate(`/user?redirect=${encodeURIComponent(bookingUrl)}`);
+      return;
+    }
+    navigate(bookingUrl);
   };
 
   return (

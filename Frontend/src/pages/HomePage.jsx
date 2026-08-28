@@ -243,6 +243,23 @@ export const HomePage = () => {
       result = result.filter((e) => Number(e.price) > 0 && Number(e.price) <= 500);
     }
 
+    // Genre filter from FilterModal
+    if (advancedFilters.genre && advancedFilters.genre !== 'All Genres') {
+      const g = advancedFilters.genre.toLowerCase();
+      result = result.filter((e) => {
+        const combined = `${e.type || ''} ${e.event_type || ''} ${e.category || ''} ${e.title || ''} ${e.description || ''}`.toLowerCase();
+        if (g.includes('comedy')) return combined.includes('comedy') || combined.includes('standup') || combined.includes('laugh');
+        if (g.includes('acoustic')) return combined.includes('acoustic') || combined.includes('unplugged') || combined.includes('music');
+        if (g.includes('electronic') || g.includes('dj')) return combined.includes('electronic') || combined.includes('dj') || combined.includes('nightlife');
+        if (g.includes('rock') || g.includes('indie')) return combined.includes('rock') || combined.includes('indie') || combined.includes('band');
+        if (g.includes('workshop') || g.includes('craft')) return combined.includes('workshop') || combined.includes('create') || combined.includes('craft') || combined.includes('art');
+        if (g.includes('cinema') || g.includes('screenings')) return combined.includes('cinema') || combined.includes('film') || combined.includes('movie') || combined.includes('screen');
+        if (g.includes('culinary') || g.includes('dining')) return combined.includes('food') || combined.includes('brunch') || combined.includes('dining') || combined.includes('drink');
+        if (g.includes('fitness') || g.includes('yoga')) return combined.includes('move') || combined.includes('run') || combined.includes('yoga') || combined.includes('fitness');
+        return combined.includes(g);
+      });
+    }
+
     // Sort order
     if (advancedFilters.sort === 'price_low_high') {
       result.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
@@ -250,6 +267,12 @@ export const HomePage = () => {
       result.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
     } else if (advancedFilters.sort === 'popularity') {
       result.sort((a, b) => (Number(b.rating_count) || 0) - (Number(a.rating_count) || 0));
+    } else if (advancedFilters.sort === 'date') {
+      result.sort((a, b) => {
+        const dateA = new Date((a.time || '').replace(' ', 'T')).getTime() || 0;
+        const dateB = new Date((b.time || '').replace(' ', 'T')).getTime() || 0;
+        return dateA - dateB;
+      });
     }
 
     return result;

@@ -431,17 +431,22 @@ class RegisterRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    full_name: str = Field(min_length=2, max_length=100)
+    full_name: str | None = Field(default=None, max_length=100)
+    name: str | None = Field(default=None, max_length=100)
     username: str = Field(min_length=3, max_length=30)
-    email: str = Field(min_length=3, max_length=150)
+    email: str | None = Field(default=None, max_length=150)
     mobile: str | None = Field(default=None)
+    phone: str | None = Field(default=None)
+    password: str | None = Field(default=None, max_length=128)
 
-    @field_validator("full_name")
+    @field_validator("full_name", "name")
     @classmethod
-    def validate_full_name(cls, v: str) -> str:
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         clean = v.strip()
         if not clean:
-            raise ValueError("Full name cannot be empty.")
+            return None
         if any(char.isdigit() for char in clean):
             raise ValueError("Full name must contain letters only (numbers are not allowed).")
         if not re.match(r"^[A-Za-z\s.'-]+$", clean):
@@ -460,15 +465,19 @@ class UpdateProfileRequest(BaseModel):
             raise ValueError("Username can only contain letters, numbers, and underscores (_) with no spaces or special symbols.")
         return clean
 
-    @field_validator("mobile")
+    @field_validator("mobile", "phone")
     @classmethod
     def validate_mobile(cls, v: str | None) -> str | None:
         return sanitize_and_validate_mobile(v, required=False)
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, v: str) -> str:
+    def validate_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         clean = v.strip().lower()
+        if not clean:
+            return None
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
             raise ValueError("Please enter a valid email address.")
         return clean
@@ -507,9 +516,10 @@ class ImageUploadRequest(BaseModel):
 
 
 class EventRequest(BaseModel):
-    slug: str = Field(min_length=2, max_length=100, pattern=r"^[a-z0-9-]+$")
+    slug: str | None = Field(default=None, max_length=100)
     title: str = Field(min_length=2, max_length=160)
-    event_type: str = Field(min_length=2, max_length=80)
+    event_type: str | None = Field(default=None, max_length=80)
+    type: str | None = Field(default=None, max_length=80)
     venue: str = Field(min_length=2, max_length=160)
     time: str = Field(min_length=2, max_length=100)
     location: str = Field(min_length=2, max_length=160)
@@ -517,7 +527,7 @@ class EventRequest(BaseModel):
     image: str = Field(min_length=5, max_length=500)
     description: str = Field(min_length=2, max_length=2000)
     category: str = Field(min_length=2, max_length=50)
-    day: str = Field(min_length=2, max_length=20)
+    day: str | None = Field(default="weekend", max_length=20)
 
 
 class CreatePaymentOrderRequest(BaseModel):
@@ -528,6 +538,12 @@ class CreatePaymentOrderRequest(BaseModel):
     quantity: int = Field(ge=1, le=20)
     event_id: int | None = None
     event_slug: str | None = None
+    guest_name: str | None = None
+    guest_email: str | None = None
+    guest_phone: str | None = None
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
 
 
 class BookingRequest(BaseModel):
@@ -538,6 +554,12 @@ class BookingRequest(BaseModel):
     quantity: int = Field(ge=1, le=20)
     event_id: int | None = None
     event_slug: str | None = None
+    guest_name: str | None = None
+    guest_email: str | None = None
+    guest_phone: str | None = None
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
 
 
 class VerifyPaymentRequest(BaseModel):
@@ -551,6 +573,12 @@ class VerifyPaymentRequest(BaseModel):
     quantity: int = Field(ge=1, le=20)
     event_id: int | None = None
     event_slug: str | None = None
+    guest_name: str | None = None
+    guest_email: str | None = None
+    guest_phone: str | None = None
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
 
 
 class BookmarkToggleRequest(BaseModel):
@@ -865,6 +893,82 @@ def require_user(request: Request, db: Session) -> User:
     return user
 
 
+def get_or_create_user_for_booking(
+    request: Request,
+    db: Session,
+    name: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+) -> User:
+    # 1. Try logged-in user first
+    session_token = request.cookies.get("maxshow_session")
+    user_id = active_sessions.get(session_token) if session_token else None
+    if user_id:
+        user = db.get(User, user_id)
+        if user:
+            return user
+
+    # 2. Try guest details if provided
+    clean_email = (email or "").strip().lower()
+    clean_name = (name or "").strip()
+    clean_phone = sanitize_and_validate_mobile(phone, required=False) or "0000000000"
+
+    if clean_email:
+        existing_user = db.query(User).filter(func.lower(User.email) == clean_email).first()
+        if existing_user:
+            return existing_user
+
+        if not clean_name:
+            clean_name = clean_email.split("@")[0].replace(".", " ").title()
+
+        base_username = generate_user_username(clean_name, clean_phone)
+        candidate = base_username
+        cnt = 1
+        while db.query(User).filter(func.lower(User.username) == candidate.lower()).first():
+            candidate = f"{base_username}_{cnt}"
+            cnt += 1
+
+        cid = generate_user_custom_id(clean_name, clean_phone)
+        existing_cid_count = db.query(User).filter(User.custom_id.like(f"{cid}%")).count()
+        if existing_cid_count > 0:
+            cid = f"{cid}-{existing_cid_count + 1}"
+
+        new_guest_user = User(
+            custom_id=cid,
+            username=candidate,
+            full_name=clean_name,
+            email=clean_email,
+            phone_number=clean_phone,
+            password=hash_password(secrets.token_urlsafe(16)),
+        )
+        db.add(new_guest_user)
+        db.commit()
+        db.refresh(new_guest_user)
+
+        # Broadcast new user creation to admin portal
+        admin_broker.broadcast_sync("user_registered", {
+            "id": new_guest_user.id,
+            "user_id": new_guest_user.custom_id,
+            "username": new_guest_user.username,
+            "name": new_guest_user.full_name,
+            "email": new_guest_user.email,
+            "phone": new_guest_user.phone_number,
+            "created_at": new_guest_user.created_at.isoformat() if new_guest_user.created_at else datetime.now().isoformat(),
+            "total_spent": 0,
+            "ticket_count": 0,
+            "bookings_count": 0,
+            "bookings": [],
+            "is_online": False,
+            "status": "Offline",
+        })
+        return new_guest_user
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Please enter your attendee details (name and email) or sign in to complete your booking.",
+    )
+
+
 def require_admin(request: Request) -> None:
     token = request.cookies.get("maxshow_admin_session") or request.query_params.get("token") or request.query_params.get("admin_token")
     if not token or token not in admin_sessions:
@@ -1085,18 +1189,6 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         db.refresh(user)
         otp_cache.pop(clean_email, None) # Clear OTP after successful registration
 
-        # Set user session token
-        token = secrets.token_urlsafe(32)
-        active_sessions[token] = user.id
-        response.set_cookie(
-            "maxshow_session",
-            token,
-            httponly=True,
-            samesite="lax",
-            max_age=86400 * 30,
-            secure=False,
-        )
-        
         # Real-time Broadcast to Admin Portal
         admin_broker.broadcast_sync("user_registered", {
             "id": user.id,
@@ -1110,8 +1202,8 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
             "ticket_count": 0,
             "bookings_count": 0,
             "bookings": [],
-            "is_online": True,
-            "status": "Online",
+            "is_online": False,
+            "status": "Offline",
         })
     except IntegrityError:
         db.rollback()
@@ -1120,7 +1212,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
             detail="An account already exists with this username, email, or mobile number.",
         )
     return {
-        "message": "Account created successfully.",
+        "message": "Account created successfully! Please sign in to continue.",
         "user": {
             "id": user.id,
             "custom_id": user.custom_id,
@@ -1210,12 +1302,15 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 
 
 @app.put("/api/auth/profile")
+@app.put("/api/auth/profile/")
+@app.put("/api/user/profile")
+@app.put("/api/user/profile/")
 def update_profile(payload: UpdateProfileRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     user = require_user(request, db)
     clean_username = payload.username.strip().lower()
-    clean_email = payload.email.strip().lower()
-    clean_mobile = payload.mobile.strip()
-    clean_name = payload.full_name.strip()
+    clean_name = (payload.full_name or payload.name or user.full_name).strip()
+    clean_email = (payload.email or user.email).strip().lower()
+    clean_mobile = (payload.mobile or payload.phone or user.phone_number or "0000000000").strip()
 
     # Check if username is taken by another user
     existing_username = db.query(User).filter(func.lower(User.username) == clean_username, User.id != user.id).first()
@@ -1229,6 +1324,8 @@ def update_profile(payload: UpdateProfileRequest, request: Request, db: Session 
     user.username = clean_username
     user.email = clean_email
     user.phone_number = clean_mobile
+    if payload.password and payload.password.strip():
+        user.password = hash_password(payload.password.strip())
 
     try:
         db.commit()
@@ -1248,19 +1345,24 @@ def update_profile(payload: UpdateProfileRequest, request: Request, db: Session 
 
 
 @app.delete("/api/auth/delete-account")
+@app.delete("/api/auth/delete-account/")
+@app.delete("/api/user/account")
+@app.delete("/api/user/account/")
 def delete_user_account(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     user = require_user(request, db)
     user_id = user.id
     user_name = user.full_name
     
-    # Delete user's bookings first
+    # Delete user's bookmarks, ratings, and bookings first
+    db.query(Bookmark).filter(Bookmark.user_id == user.id).delete()
+    db.query(Rating).filter(Rating.user_id == user.id).delete()
     db.query(Booking).filter(Booking.user_id == user.id).delete()
     
-    # Delete the user
+    # Delete the user record
     db.delete(user)
     db.commit()
 
-    # Real-time Broadcast
+    # Real-time Broadcast to Admin
     admin_broker.broadcast_sync("user_deleted", {"user_id": user_id, "name": user_name})
 
     # Invalidate session
@@ -1269,7 +1371,7 @@ def delete_user_account(request: Request, response: Response, db: Session = Depe
         active_sessions.pop(session_token, None)
     response.delete_cookie("maxshow_session")
 
-    return {"message": "Your account has been deleted successfully."}
+    return {"message": "You deleted your account."}
 
 
 @app.post("/api/admin/login")
@@ -1421,9 +1523,14 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
     extension = allowed_types.get(payload.content_type)
     if not extension:
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Upload a JPG, PNG, WEBP, or GIF image.")
+    raw_data = payload.data.strip()
+    if "," in raw_data and "base64," in raw_data:
+        raw_data = raw_data.split("base64,")[1].strip()
+    elif "," in raw_data:
+        raw_data = raw_data.split(",")[1].strip()
     try:
-        contents = base64.b64decode(payload.data, validate=True)
-    except (ValueError, base64.binascii.Error):
+        contents = base64.b64decode(raw_data)
+    except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The image data is invalid.")
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Images must be 5 MB or smaller.")
@@ -1638,10 +1745,45 @@ def toggle_user_status(user_id: int, request: Request, db: Session = Depends(get
 
 
 @app.post("/api/admin/events", status_code=status.HTTP_201_CREATED)
+@app.post("/api/admin/events/", status_code=status.HTTP_201_CREATED)
 def create_event(payload: EventRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
-    cid = generate_event_custom_id(payload.title, payload.time)
-    event = Event(custom_id=cid, **payload.model_dump())
+    clean_title = payload.title.strip()
+    raw_slug = payload.slug.strip() if payload.slug else ""
+    if not raw_slug:
+        raw_slug = re.sub(r"[^a-z0-9]+", "-", clean_title.lower()).strip("-")
+    else:
+        raw_slug = re.sub(r"[^a-z0-9]+", "-", raw_slug.lower()).strip("-")
+    if not raw_slug:
+        raw_slug = f"event-{uuid4().hex[:6]}"
+
+    candidate = raw_slug
+    cnt = 1
+    while db.query(Event).filter(Event.slug == candidate).first():
+        candidate = f"{raw_slug}-{cnt}"
+        cnt += 1
+    final_slug = candidate
+
+    ev_type = (payload.event_type or payload.type or "Experience").strip()
+    ev_day = (payload.day or "weekend").strip().lower()
+
+    cid = generate_event_custom_id(clean_title, payload.time)
+    event = Event(
+        custom_id=cid,
+        slug=final_slug,
+        title=clean_title,
+        event_type=ev_type,
+        venue=payload.venue.strip(),
+        time=payload.time.strip(),
+        location=payload.location.strip(),
+        price=payload.price,
+        image=payload.image.strip(),
+        description=payload.description.strip(),
+        category=payload.category.strip().lower(),
+        day=ev_day,
+        rating=4.8,
+        rating_count=0,
+    )
     db.add(event)
     try:
         db.commit()
@@ -1659,15 +1801,35 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
     return {"event": ev_data}
 
 
-@app.put("/api/admin/events/{event_id}")
-def update_event(event_id: int, payload: EventRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+@app.put("/api/admin/events/{identifier}")
+@app.put("/api/admin/events/{identifier}/")
+def update_event(identifier: str, payload: EventRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
-    event = db.get(Event, event_id)
+    event = resolve_event_by_identifier(identifier, db)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
-    for key, value in payload.model_dump().items():
-        setattr(event, key, value)
-    event.custom_id = generate_event_custom_id(payload.title, payload.time)
+
+    clean_title = payload.title.strip()
+    if payload.slug and payload.slug.strip():
+        new_slug = re.sub(r"[^a-z0-9]+", "-", payload.slug.strip().lower()).strip("-")
+        if new_slug:
+            other = db.query(Event).filter(Event.slug == new_slug, Event.id != event.id).first()
+            if not other:
+                event.slug = new_slug
+
+    event.title = clean_title
+    event.event_type = (payload.event_type or payload.type or event.event_type).strip()
+    event.venue = payload.venue.strip()
+    event.time = payload.time.strip()
+    event.location = payload.location.strip()
+    event.price = payload.price
+    event.image = payload.image.strip()
+    event.description = payload.description.strip()
+    event.category = payload.category.strip().lower()
+    if payload.day:
+        event.day = payload.day.strip().lower()
+    event.custom_id = generate_event_custom_id(event.title, event.time)
+
     try:
         db.commit()
         db.refresh(event)
@@ -1684,12 +1846,14 @@ def update_event(event_id: int, payload: EventRequest, request: Request, db: Ses
     return {"event": ev_data}
 
 
-@app.delete("/api/admin/events/{event_id}")
-def delete_event(event_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+@app.delete("/api/admin/events/{identifier}")
+@app.delete("/api/admin/events/{identifier}/")
+def delete_event(identifier: str, request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
-    event = db.get(Event, event_id)
+    event = resolve_event_by_identifier(identifier, db)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    event_id = event.id
     title = event.title
     db.delete(event)
     db.commit()
@@ -1734,6 +1898,7 @@ def get_user_bookings(user_id: int, request: Request, db: Session = Depends(get_
 
 
 @app.delete("/api/admin/users/{user_id}")
+@app.delete("/api/admin/users/{user_id}/")
 def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
     user = db.get(User, user_id)
@@ -1750,16 +1915,28 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)) -
     return {"message": "User deleted."}
 
 
-@app.delete("/api/admin/bookings/{booking_id}")
-def delete_booking(booking_id: int, request: Request, db: Session = Depends(get_db)) -> dict:
+@app.post("/api/admin/bookings/{identifier}/cancel")
+@app.post("/api/admin/bookings/{identifier}/cancel/")
+@app.delete("/api/admin/bookings/{identifier}/cancel")
+@app.delete("/api/admin/bookings/{identifier}/cancel/")
+@app.delete("/api/admin/bookings/{identifier}")
+@app.delete("/api/admin/bookings/{identifier}/")
+def delete_or_cancel_booking(identifier: str, request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
-    booking = db.get(Booking, booking_id)
+    booking = None
+    if identifier.isdigit():
+        booking = db.get(Booking, int(identifier))
+    if not booking:
+        booking = db.query(Booking).filter(Booking.custom_id == identifier).first()
+    if not booking:
+        booking = db.query(Booking).filter(Booking.custom_id.ilike(f"%{identifier}%")).first()
     if not booking:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+    booking_id = booking.id
     db.delete(booking)
     db.commit()
     admin_broker.broadcast_sync("booking_deleted", {"booking_id": booking_id})
-    return {"message": "Booking deleted successfully."}
+    return {"message": "Booking cancelled and deleted successfully.", "booking_id": booking_id}
 
 
 def create_razorpay_order(amount_in_paise: int, receipt: str, notes: dict = None) -> dict:
@@ -1800,7 +1977,13 @@ def create_razorpay_order(amount_in_paise: int, receipt: str, notes: dict = None
 @app.post("/api/bookings")
 @app.post("/api/bookings/")
 def create_booking(payload: BookingRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    user = require_user(request, db)
+    user = get_or_create_user_for_booking(
+        request,
+        db,
+        name=payload.guest_name or payload.name,
+        email=payload.guest_email or payload.email,
+        phone=payload.guest_phone or payload.phone,
+    )
     matched_event = resolve_event(db, payload.event_id, payload.event_slug, payload.title)
     u_cid = user.custom_id or generate_user_custom_id(user.full_name, user.phone_number)
     e_cid = (matched_event.custom_id if matched_event else None) or generate_event_custom_id(payload.title, payload.time)
@@ -1841,7 +2024,13 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
 def create_payment_order(
     payload: CreatePaymentOrderRequest, request: Request, db: Session = Depends(get_db)
 ) -> dict:
-    user = require_user(request, db)
+    user = get_or_create_user_for_booking(
+        request,
+        db,
+        name=payload.guest_name or payload.name,
+        email=payload.guest_email or payload.email,
+        phone=payload.guest_phone or payload.phone,
+    )
     total_amount = payload.price * payload.quantity
     matched_event = resolve_event(db, payload.event_id, payload.event_slug, payload.title)
 
@@ -1910,7 +2099,13 @@ def create_payment_order(
 def verify_payment(
     payload: VerifyPaymentRequest, request: Request, db: Session = Depends(get_db)
 ) -> dict:
-    user = require_user(request, db)
+    user = get_or_create_user_for_booking(
+        request,
+        db,
+        name=payload.guest_name or payload.name,
+        email=payload.guest_email or payload.email,
+        phone=payload.guest_phone or payload.phone,
+    )
 
     # Verify HMAC-SHA256 signature
     message = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}"

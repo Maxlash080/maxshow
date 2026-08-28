@@ -13,7 +13,8 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
 
   return (
     <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="relative mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Left Side: Brand Logo */}
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2.5 group" aria-label="MAXSHOW home">
             <img
@@ -25,7 +26,8 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
           </Link>
         </div>
 
-        <nav className="hidden items-center gap-7 text-sm font-semibold md:flex">
+        {/* Center: Navigation Links (Mathematically Centered) */}
+        <nav className="hidden items-center gap-8 text-sm font-bold md:flex absolute left-1/2 -translate-x-1/2">
           <Link className="transition hover:text-coral text-ink dark:text-white" to="/all-events">
             All events
           </Link>
@@ -38,17 +40,9 @@ export const Navbar = ({ currentLocation, onLocationChange }) => {
           <Link className="transition hover:text-coral text-ink dark:text-white" to="/about">
             About us
           </Link>
-          <a
-            className="transition hover:text-coral text-ink dark:text-white"
-            href="https://mail.google.com/mail/?view=cm&fs=1&to=official.maxshow@gmail.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Send email to official.maxshow@gmail.com"
-          >
-            Contact us
-          </a>
         </nav>
 
+        {/* Right Side: Actions & Profile */}
         <div className="flex items-center gap-2.5 sm:gap-3">
           {onLocationChange && (
             <LocationPicker currentLocation={currentLocation} onLocationChange={onLocationChange} />

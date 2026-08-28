@@ -3,6 +3,7 @@
  */
 
 export const LOCATIONS = [
+  'Pimpri-Chinchwad',
   'Pimpri',
   'Chinchwad',
   'Hinjawadi',

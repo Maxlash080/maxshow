@@ -102,6 +102,7 @@ export const UserDashboard = () => {
         name: profileForm.name.trim(),
         username: profileForm.username.trim(),
         phone: profileForm.phone.trim(),
+        email: user?.email || '',
       };
       if (profileForm.password) payload.password = profileForm.password;
 
@@ -123,17 +124,18 @@ export const UserDashboard = () => {
   const handleDeleteAccount = async () => {
     const confirmed = await showConfirmModal({
       title: 'Delete Your Account?',
-      message: 'Are you sure you want to permanently delete your MAXSHOW account? All your digital tickets and reservations will be cancelled.',
-      icon: '⚠️',
-      confirmText: 'Delete Account',
+      message: 'Are you sure you want to permanently delete your MAXSHOW account? Your account will be removed from the database and all your active reservations will be deleted.',
+      icon: '🗑️',
+      confirmText: 'Yes, Delete Account',
+      cancelText: 'Cancel',
       type: 'danger',
     });
     if (!confirmed) return;
 
     try {
-      await apiRequest('/api/user/account', { method: 'DELETE' });
-      showToast('Account deleted. We are sorry to see you go.');
+      const res = await apiRequest('/api/auth/delete-account', { method: 'DELETE' });
       await logout();
+      showToast(res.message || 'You deleted your account.');
       navigate('/');
     } catch (err) {
       showToast(err.message || 'Failed to delete account');

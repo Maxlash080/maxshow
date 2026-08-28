@@ -62,6 +62,12 @@ export const BookingPage = () => {
       time: event.time || 'TBA',
       price: unitPrice,
       quantity,
+      guest_name: !isAuthenticated ? guestName.trim() : (user?.name || ''),
+      guest_email: !isAuthenticated ? guestEmail.trim() : (user?.email || ''),
+      guest_phone: user?.phone || '',
+      name: !isAuthenticated ? guestName.trim() : (user?.name || ''),
+      email: !isAuthenticated ? guestEmail.trim() : (user?.email || ''),
+      phone: user?.phone || '',
     };
 
     // Free Ticket Flow

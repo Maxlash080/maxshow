@@ -512,10 +512,15 @@ export const AdminDashboard = () => {
 
     setSavingEvent(true);
     try {
+      const cleanTitle = eventFormData.title.trim();
+      const generatedSlug = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const rawSlug = eventFormData.slug.trim() ? eventFormData.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : generatedSlug;
+
       const payload = {
-        title: eventFormData.title.trim(),
-        slug: eventFormData.slug.trim() || eventFormData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        title: cleanTitle,
+        slug: rawSlug || `event-${Date.now().toString(36)}`,
         type: eventFormData.type,
+        event_type: eventFormData.type,
         category: eventFormData.category,
         venue: eventFormData.venue.trim(),
         location: eventFormData.location.trim(),
@@ -523,6 +528,7 @@ export const AdminDashboard = () => {
         price: Number(eventFormData.price) || 0,
         image: eventFormData.image.trim(),
         description: eventFormData.description.trim(),
+        day: 'weekend',
       };
 
       if (editingEvent) {

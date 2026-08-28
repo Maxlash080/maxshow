@@ -11,7 +11,7 @@ export const UserSignInPage = () => {
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
-    email: '',
+    email: location.state?.email || '',
     password: '',
     remember_me: false,
   });
@@ -137,6 +137,13 @@ export const UserSignInPage = () => {
           <h2 className="mt-1 text-2xl sm:text-3xl font-black text-ink dark:text-white">Sign in</h2>
           <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Enter your details to continue your booking.</p>
 
+          {location.state?.successMessage && !errorMessage && (
+            <div className="mt-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2 animate-fade-in">
+              <span>🎉</span>
+              <span>{location.state.successMessage}</span>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600 dark:bg-red-950/50 dark:text-red-300">
               ⚠️ {errorMessage}
@@ -164,7 +171,7 @@ export const UserSignInPage = () => {
                 <label className="text-xs sm:text-sm font-bold text-ink dark:text-slate-200" htmlFor="password">
                   Password
                 </label>
-                <a className="text-xs font-bold text-coral hover:underline" href="#">Forgot password?</a>
+                <a className="text-xs font-bold text-coral hover:underline" href="mailto:official.maxshow@gmail.com?subject=MAXSHOW%20Password%20Reset%20Request">Forgot password?</a>
               </div>
               <div className="relative">
                 <input

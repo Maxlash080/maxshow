@@ -179,9 +179,13 @@ export const RegistrationPage = () => {
         }),
       });
 
-      showToast(res.message || 'Account created successfully! Welcome to MAXSHOW! 🎉');
-      await refreshAuth();
-      navigate('/dashboard');
+      showToast('Account created successfully! Please sign in to continue. 🎉');
+      navigate('/user', {
+        state: {
+          email: formData.email.trim(),
+          successMessage: 'Account created successfully! Please enter your password to sign in.',
+        },
+      });
     } catch (err) {
       setErrorMessage(err.message || 'Registration failed.');
       showToast(err.message || 'Registration failed');

@@ -9,7 +9,7 @@ export const apiRequest = async (url, options = {}) => {
   };
 
   const response = await fetch(url, {
-    credentials: 'same-origin',
+    credentials: 'include',
     ...options,
     headers: {
       ...defaultHeaders,

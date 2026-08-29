@@ -46,7 +46,11 @@ export const AuthProvider = ({ children }) => {
   userRef.current = user;
 
   const recordActivity = useCallback(() => {
-    lastActivityRef.current = Date.now();
+    const now = Date.now();
+    lastActivityRef.current = now;
+    try {
+      localStorage.setItem('MAXSHOW_LAST_ACTIVITY', String(now));
+    } catch (_) {}
   }, []);
 
   const setUserRating = useCallback((eventId, eventSlug, rating) => {
@@ -77,7 +81,7 @@ export const AuthProvider = ({ children }) => {
       if (authData && authData.user) {
         setUser(authData.user);
         setIsAdmin(Boolean(authData.user.is_admin || authData.user.username === 'admin'));
-        lastActivityRef.current = Date.now();
+        recordActivity();
       } else {
         setUser(null);
         setIsAdmin(currentAdmin);
@@ -109,7 +113,7 @@ export const AuthProvider = ({ children }) => {
     } catch (_) {}
 
     setLoading(false);
-  }, []);
+  }, [recordActivity]);
 
   useEffect(() => {
     refreshAuth();
@@ -170,7 +174,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [showToast, recordActivity]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (isAutoLogout = false) => {
     try {
       await apiRequest('/api/auth/logout', { method: 'POST' });
     } catch (_) {}
@@ -180,30 +184,89 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAdmin(false);
     setUserRatings({});
-    showToast('You have been signed out.');
+    if (isAutoLogout) {
+      showToast('You have been logged out due to inactivity.');
+    } else {
+      showToast('You have been signed out.');
+    }
   }, [showToast]);
 
-  // Heartbeat Presence Ping (Keeps presence status active on server while user is browsing)
+  // Movement & Inactivity Detector (Auto-logs out user if no movement/interaction for 2 minutes)
   useEffect(() => {
     if (!user) return;
+
+    recordActivity();
 
     let lastThrottledTime = 0;
     const handleUserInteraction = () => {
       const now = Date.now();
-      if (now - lastThrottledTime > 2000) {
+      if (now - lastThrottledTime > 500) {
         lastThrottledTime = now;
-        lastActivityRef.current = now;
+        recordActivity();
       }
     };
 
-    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click', 'wheel'];
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        let lastAct = lastActivityRef.current;
+        try {
+          const stored = Number(localStorage.getItem('MAXSHOW_LAST_ACTIVITY'));
+          if (stored && !isNaN(stored)) {
+            lastAct = Math.max(lastAct, stored);
+          }
+        } catch (_) {}
+
+        if (Date.now() - lastAct >= INACTIVITY_TIMEOUT_MS) {
+          logout(true);
+        } else {
+          recordActivity();
+        }
+      }
+    };
+
+    const events = [
+      'mousemove',
+      'mousedown',
+      'mouseup',
+      'keydown',
+      'touchstart',
+      'touchmove',
+      'scroll',
+      'click',
+      'wheel',
+      'pointermove',
+      'pointerdown',
+    ];
+
     events.forEach((evt) => {
       window.addEventListener(evt, handleUserInteraction, { passive: true });
     });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Periodic Heartbeat Ping (Every 35 seconds while active)
+    // Check inactivity every second
+    const inactivityInterval = setInterval(() => {
+      if (!userRef.current) return;
+
+      let lastAct = lastActivityRef.current;
+      try {
+        const stored = Number(localStorage.getItem('MAXSHOW_LAST_ACTIVITY'));
+        if (stored && !isNaN(stored) && stored > lastAct) {
+          lastAct = stored;
+          lastActivityRef.current = stored;
+        }
+      } catch (_) {}
+
+      const elapsed = Date.now() - lastAct;
+      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+        logout(true);
+      }
+    }, 1000);
+
+    // Periodic Heartbeat (Every 35 seconds while user is actively browsing)
     const heartbeatInterval = setInterval(() => {
-      if (Date.now() - lastActivityRef.current < 5 * 60 * 1000) {
+      if (!userRef.current) return;
+      const elapsed = Date.now() - lastActivityRef.current;
+      if (elapsed < INACTIVITY_TIMEOUT_MS) {
         apiRequest('/api/auth/heartbeat', { method: 'POST' }).catch(() => {});
       }
     }, HEARTBEAT_INTERVAL_MS);
@@ -212,9 +275,11 @@ export const AuthProvider = ({ children }) => {
       events.forEach((evt) => {
         window.removeEventListener(evt, handleUserInteraction);
       });
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(inactivityInterval);
       clearInterval(heartbeatInterval);
     };
-  }, [user]);
+  }, [user, logout, recordActivity]);
 
   return (
     <AuthContext.Provider

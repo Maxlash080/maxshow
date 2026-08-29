@@ -18,7 +18,17 @@ export const EventDetailsPage = () => {
 
   const slug = routeSlug || searchParams.get('event') || 'moonlight-picnic';
 
-  const [event, setEvent] = useState(() => FALLBACK_EVENTS[slug] || Object.values(FALLBACK_EVENTS)[0]);
+  const [event, setEvent] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('MAXSHOW_EVENTS_CACHE');
+      if (raw) {
+        const list = JSON.parse(raw);
+        const match = list.find((e) => e.slug === slug || String(e.id) === String(slug));
+        if (match) return match;
+      }
+    } catch (_) {}
+    return FALLBACK_EVENTS[slug] || Object.values(FALLBACK_EVENTS)[0];
+  });
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
 

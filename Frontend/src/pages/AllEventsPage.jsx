@@ -15,20 +15,61 @@ const FILTER_CATEGORIES = [
   { id: 'move', label: 'Move & Sports' },
 ];
 
+const getStoredEvents = () => {
+  try {
+    const raw = sessionStorage.getItem('MAXSHOW_EVENTS_CACHE');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (_) {}
+  return Object.values(FALLBACK_EVENTS);
+};
+
 export const AllEventsPage = () => {
-  const [events, setEvents] = useState(Object.values(FALLBACK_EVENTS));
+  const [events, setEvents] = useState(getStoredEvents);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    let isMounted = true;
+    let eventSource = null;
+
     apiRequest('/api/events')
       .then((data) => {
-        if (data && Array.isArray(data.events) && data.events.length > 0) {
+        if (isMounted && data && Array.isArray(data.events) && data.events.length > 0) {
           setEvents(data.events);
+          try {
+            sessionStorage.setItem('MAXSHOW_EVENTS_CACHE', JSON.stringify(data.events));
+          } catch (_) {}
         }
       })
       .catch(() => {});
+
+    try {
+      eventSource = new EventSource('/api/events/live-stream');
+      eventSource.addEventListener('events_updated', (e) => {
+        if (!isMounted) return;
+        try {
+          const payload = JSON.parse(e.data);
+          const action = payload.action;
+          const ev = payload.event;
+          if (action === 'create' && ev) {
+            setEvents((prev) => [ev, ...prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug)]);
+          } else if (action === 'update' && ev) {
+            setEvents((prev) => prev.map((item) => (item.id === ev.id || item.slug === ev.slug ? ev : item)));
+          } else if (action === 'delete' && ev) {
+            setEvents((prev) => prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug));
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
+
+    return () => {
+      isMounted = false;
+      if (eventSource) eventSource.close();
+    };
   }, []);
 
   const filtered = useMemo(() => {

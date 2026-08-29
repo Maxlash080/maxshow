@@ -33,9 +33,20 @@ const QUICK_FILTERS = [
   { id: 'under500', label: 'Under ₹500' },
 ];
 
+const getStoredEvents = () => {
+  try {
+    const raw = sessionStorage.getItem('MAXSHOW_EVENTS_CACHE');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (_) {}
+  return Object.values(FALLBACK_EVENTS);
+};
+
 export const HomePage = () => {
   const navigate = useNavigate();
-  const [events, setEvents] = useState(Object.values(FALLBACK_EVENTS));
+  const [events, setEvents] = useState(getStoredEvents);
   const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0] !== 'Pune' ? LOCATIONS[0] : 'Hinjawadi');
   const [activeQuickFilter, setActiveQuickFilter] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -78,6 +89,9 @@ export const HomePage = () => {
         const data = await apiRequest('/api/events');
         if (isMounted && data && Array.isArray(data.events) && data.events.length > 0) {
           setEvents(data.events);
+          try {
+            sessionStorage.setItem('MAXSHOW_EVENTS_CACHE', JSON.stringify(data.events));
+          } catch (_) {}
         }
       } catch (e) {
         console.error('[Home] Error fetching initial events:', e);

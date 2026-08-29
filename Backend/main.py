@@ -950,6 +950,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 INACTIVITY_TIMEOUT_SECONDS = 120  # 2 minutes of idle time before automatic session logout
 active_sessions: dict[str, int] = {}
 session_last_active: dict[str, float] = {}
@@ -2851,11 +2860,20 @@ if (STATIC_TARGET_DIR / "assets").exists():
 async def serve_spa(full_path: str):
     file_path = STATIC_TARGET_DIR / full_path
     if full_path and file_path.is_file():
+        if "assets/" in full_path:
+            return FileResponse(file_path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
         return FileResponse(file_path)
     # If not a physical file, return index.html for React Router to handle
     index_file = STATIC_TARGET_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return HTMLResponse("<h1>MAXSHOW Frontend Not Found</h1>", status_code=404)
 
 

@@ -82,7 +82,7 @@ export const CustomDatePicker = ({
 
     const formatted = formatDateToString(viewYear, viewMonth, day);
     onChange(formatted);
-    setIsOpen(false);
+    // Keep popover open so user can see selection and confirm with "Done"
   };
 
   const handleQuickSelect = (daysOffset) => {
@@ -93,6 +93,15 @@ export const CustomDatePicker = ({
     onChange(formatted);
     setViewYear(target.getFullYear());
     setViewMonth(target.getMonth());
+    // Keep popover open so user can see selection and confirm with "Done"
+  };
+
+  const handleDone = () => {
+    if (!value) {
+      // Default to today if no date was chosen
+      const formatted = formatDateToString(today.getFullYear(), today.getMonth(), today.getDate());
+      onChange(formatted);
+    }
     setIsOpen(false);
   };
 
@@ -266,7 +275,7 @@ export const CustomDatePicker = ({
           <div className="mt-3">
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
+              onClick={handleDone}
               className="w-full py-2 rounded-xl bg-coral text-white text-xs font-bold shadow-md hover:bg-[#df503c] transition active:scale-98"
             >
               Done

@@ -77,7 +77,6 @@ export const CustomTimePicker = ({
     setMinute(m);
     setPeriod(p);
     emitTime(h12, m, p);
-    setIsOpen(false);
   };
 
   // Formatted display string e.g. "08:00 PM"

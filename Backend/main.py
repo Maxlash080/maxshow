@@ -2009,24 +2009,44 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
     return {"url": f"/uploads/{filename}"}
 
 
-def ensure_image_stored_locally(image_val: str, slug: str = "") -> str:
+def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id: str = None, slug: str = "") -> str:
     """
-    Ensures any event image is saved as a physical static file inside Backend/uploads/.
-    If an admin provides a remote URL (http/https), this downloads and saves it
-    into Backend/uploads/<slug>_<hash>.<ext> and returns /uploads/<filename>.
+    Ensures any event image is saved as a physical static file named by event ID
+    (e.g., /uploads/event_1.jpg) inside Backend/uploads/.
     """
     if not image_val or not image_val.strip():
-        return "/uploads/blue_room_acoustic.jpg"
+        return f"/uploads/event_{event_id}.jpg" if event_id else "/uploads/event_1.jpg"
     image_val = image_val.strip()
+
+    upload_dir = BASE_DIR / "uploads"
+    upload_dir.mkdir(exist_ok=True)
+
+    if event_id:
+        target_stem = f"event_{event_id}"
+    elif custom_id:
+        target_stem = f"event_{custom_id.lower()}"
+    else:
+        clean_slug = re.sub(r"[^a-z0-9]+", "_", (slug or "event").lower()).strip("_")[:20]
+        target_stem = f"event_{clean_slug}"
+
     if image_val.startswith("/uploads/"):
+        src_name = os.path.basename(image_val)
+        src_file = upload_dir / src_name
+        if event_id:
+            ext = os.path.splitext(src_name)[1] or ".jpg"
+            target_name = f"{target_stem}{ext}"
+            target_file = upload_dir / target_name
+            if src_file.exists() and src_file != target_file:
+                try:
+                    shutil.copy2(src_file, target_file)
+                except Exception as e:
+                    print(f"[Image Rename Error] {e}")
+            if target_file.exists():
+                return f"/uploads/{target_name}"
         return image_val
+
     if image_val.startswith("http://") or image_val.startswith("https://"):
         try:
-            upload_dir = BASE_DIR / "uploads"
-            upload_dir.mkdir(exist_ok=True)
-            url_hash = hashlib.md5(image_val.encode("utf-8")).hexdigest()[:8]
-            clean_slug = re.sub(r"[^a-z0-9]+", "_", (slug or "event").lower()).strip("_")[:30]
-            
             ext = ".jpg"
             clean_url = image_val.lower().split("?")[0]
             if clean_url.endswith(".png"):
@@ -2037,20 +2057,20 @@ def ensure_image_stored_locally(image_val: str, slug: str = "") -> str:
                 ext = ".gif"
             elif clean_url.endswith(".jpeg"):
                 ext = ".jpeg"
-            
-            filename = f"{clean_slug}_{url_hash}{ext}"
-            target_path = upload_dir / filename
-            if not target_path.exists() or target_path.stat().st_size == 0:
-                req = urllib.request.Request(
-                    image_val,
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    target_path.write_bytes(resp.read())
-            return f"/uploads/{filename}"
+
+            target_name = f"{target_stem}{ext}"
+            target_path = upload_dir / target_name
+            req = urllib.request.Request(
+                image_val,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                target_path.write_bytes(resp.read())
+            return f"/uploads/{target_name}"
         except Exception as e:
             print(f"[Image Local Store Warning] Could not cache remote image: {e}")
             return image_val
+
     return image_val
 
 
@@ -2304,7 +2324,6 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
     ev_day = (payload.day or "weekend").strip().lower()
 
     cid = generate_event_custom_id(clean_title, payload.time)
-    final_image = ensure_image_stored_locally(payload.image, final_slug)
     event = Event(
         custom_id=cid,
         slug=final_slug,
@@ -2314,7 +2333,7 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
         time=payload.time.strip(),
         location=payload.location.strip(),
         price=payload.price,
-        image=final_image,
+        image=payload.image.strip() or "/uploads/event_1.jpg",
         description=payload.description.strip(),
         category=payload.category.strip().lower(),
         day=ev_day,
@@ -2323,6 +2342,8 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
     )
     db.add(event)
     try:
+        db.flush()
+        event.image = ensure_image_stored_locally(payload.image, event_id=event.id, custom_id=event.custom_id, slug=event.slug)
         db.commit()
         db.refresh(event)
         ev_data = event_data(event)
@@ -2354,7 +2375,7 @@ def update_event(identifier: str, payload: EventRequest, request: Request, db: S
             if not other:
                 event.slug = new_slug
 
-    final_image = ensure_image_stored_locally(payload.image, event.slug)
+    final_image = ensure_image_stored_locally(payload.image, event_id=event.id, custom_id=event.custom_id, slug=event.slug)
     event.title = clean_title
     event.event_type = (payload.event_type or payload.type or event.event_type).strip()
     event.venue = payload.venue.strip()

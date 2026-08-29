@@ -174,7 +174,7 @@ export const EventDetailsPage = () => {
 
           {/* Right Column: Ticket Counter & Booking CTA */}
           <div className="space-y-6">
-            <div className="sticky top-28 rounded-[2.5rem] border border-stone-200/80 bg-white p-6 sm:p-8 shadow-soft dark:border-slate-700/80 dark:bg-[#1c2733] space-y-6">
+            <div className="rounded-[2.5rem] border border-stone-200/80 bg-white p-6 sm:p-8 shadow-soft dark:border-slate-700/80 dark:bg-[#1c2733] space-y-6">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-coral">Secure your spot</p>
                 <h3 className="mt-1 text-2xl font-black text-ink dark:text-white">Reserve Tickets</h3>

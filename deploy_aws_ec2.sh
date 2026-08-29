@@ -48,7 +48,7 @@ After=network.target
 [Service]
 User=ubuntu
 WorkingDirectory=/var/www/maxshow
-ExecStart=/var/www/maxshow/.venv/bin/python -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000 --workers 2
+ExecStart=/var/www/maxshow/.venv/bin/python -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
 RestartSec=5
 Environment="PATH=/var/www/maxshow/.venv/bin:/usr/bin"

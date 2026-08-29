@@ -77,15 +77,21 @@ export const HeroShowcase = ({ events = [] }) => {
     >
       {/* Dual Layer Crossfading Images */}
       <img
-        src={imgSrc1}
+        src={imgSrc1 || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85'}
         alt="Featured experience"
+        onError={(e) => {
+          e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85';
+        }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-in-out group-hover:scale-105 ${
           activeLayer === 1 ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
       <img
-        src={imgSrc2}
+        src={imgSrc2 || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85'}
         alt="Featured experience"
+        onError={(e) => {
+          e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85';
+        }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-in-out group-hover:scale-105 ${
           activeLayer === 2 ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}

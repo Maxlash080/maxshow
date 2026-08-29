@@ -483,8 +483,11 @@ export const HomePage = () => {
                     <div className="relative h-52 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                       <img
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        src={pick.image}
+                        src={pick.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80'}
                         alt={pick.title}
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
+                        }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
                       <div className="rating-badge absolute top-3.5 right-3.5 z-10 flex items-center gap-1 rounded-full bg-ink/80 backdrop-blur-md px-2.5 py-1 text-xs font-black text-amber-300 shadow-md ring-1 ring-white/15 dark:bg-black/80 pointer-events-none">

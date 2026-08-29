@@ -285,6 +285,7 @@ class User(Base):
     phone_number: Mapped[str] = mapped_column(String(20), unique=False, nullable=False, index=True)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    last_online: Mapped[DateTime | None] = mapped_column(DateTime, nullable=True)
 
     bookings: Mapped[list["Booking"]] = relationship("Booking", back_populates="user", cascade="all, delete-orphan")
     bookmarks: Mapped[list["Bookmark"]] = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
@@ -799,6 +800,23 @@ def resolve_event_type(ev: Event | None = None, title: str | None = None) -> str
     return "Live Event"
 
 
+def to_iso_utc(dt: datetime | str | None) -> str:
+    """Serializes a datetime to ISO-8601 string with UTC indicator for exact timezone translation in frontend."""
+    if not dt:
+        return ""
+    if isinstance(dt, str):
+        s = dt.strip()
+        if not s:
+            return ""
+        if not s.endswith("Z") and not ("+" in s[10:] or "-" in s[10:]):
+            return s.replace(" ", "T") + "Z"
+        return s.replace(" ", "T")
+    if dt.tzinfo is None:
+        return dt.isoformat() + "Z"
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -829,6 +847,9 @@ async def lifespan(_: FastAPI):
                     conn.commit()
                 if "username" not in u_cols:
                     conn.execute(text("ALTER TABLE users ADD COLUMN username VARCHAR(60) NULL"))
+                    conn.commit()
+                if "last_online" not in u_cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN last_online DATETIME NULL"))
                     conn.commit()
                 # Drop unique index on phone_number if present to allow unlimited registrations with same phone number
                 try:
@@ -878,17 +899,21 @@ async def lifespan(_: FastAPI):
 
         # Backfill existing data
         with SessionLocal() as db:
-            for u in db.query(User).filter((User.custom_id == None) | (User.custom_id == "")).all():
-                u.custom_id = generate_user_custom_id(u.full_name, u.phone_number)
+            for u in db.query(User).all():
+                if not getattr(u, "custom_id", None):
+                    u.custom_id = generate_user_custom_id(u.full_name, u.phone_number)
 
-            for u in db.query(User).filter((User.username == None) | (User.username == "")).all():
-                base_uname = generate_user_username(u.full_name, u.phone_number)
-                candidate = base_uname
-                cnt = 1
-                while db.query(User).filter(func.lower(User.username) == candidate.lower(), User.id != u.id).first():
-                    candidate = f"{base_uname}_{cnt}"
-                    cnt += 1
-                u.username = candidate
+                if not getattr(u, "username", None):
+                    base_uname = generate_user_username(u.full_name, u.phone_number)
+                    candidate = base_uname
+                    cnt = 1
+                    while db.query(User).filter(func.lower(User.username) == candidate.lower(), User.id != u.id).first():
+                        candidate = f"{base_uname}_{cnt}"
+                        cnt += 1
+                    u.username = candidate
+
+                if not getattr(u, "last_online", None):
+                    u.last_online = u.created_at or datetime.now()
 
             events_list = db.query(Event).all()
             event_title_map = {}
@@ -1072,6 +1097,10 @@ def cleanup_inactive_sessions():
                 with SessionLocal() as db:
                     u = db.get(User, uid)
                     if u:
+                        now_dt = datetime.now()
+                        u.last_online = now_dt
+                        user_last_seen[uid] = now_dt
+                        db.commit()
                         admin_broker.broadcast_sync("user_status_changed", {
                             "user_id": uid,
                             "custom_id": u.custom_id or f"USR-{uid}",
@@ -1080,8 +1109,9 @@ def cleanup_inactive_sessions():
                             "email": u.email,
                             "is_online": False,
                             "status": "Offline",
+                            "last_online": to_iso_utc(now_dt),
                             "action": "inactivity_timeout",
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": to_iso_utc(now_dt),
                         })
             except Exception as e:
                 print(f"[Cleanup Inactive Sessions Error]: {e}")
@@ -1101,6 +1131,10 @@ def touch_session(session_token: str | None) -> int | None:
                 with SessionLocal() as db:
                     u = db.get(User, uid)
                     if u:
+                        now_dt = datetime.now()
+                        u.last_online = now_dt
+                        user_last_seen[uid] = now_dt
+                        db.commit()
                         admin_broker.broadcast_sync("user_status_changed", {
                             "user_id": uid,
                             "custom_id": u.custom_id or f"USR-{uid}",
@@ -1109,8 +1143,9 @@ def touch_session(session_token: str | None) -> int | None:
                             "email": u.email,
                             "is_online": False,
                             "status": "Offline",
+                            "last_online": to_iso_utc(now_dt),
                             "action": "inactivity_timeout",
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": to_iso_utc(now_dt),
                         })
             except Exception as e:
                 print(f"[Touch Session Expire Error]: {e}")
@@ -1708,6 +1743,11 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
         session_last_active.pop(session_token, None)
     if user_id:
         user = db.get(User, user_id)
+        now_dt = datetime.now()
+        user_last_seen[user_id] = now_dt
+        if user:
+            user.last_online = now_dt
+            db.commit()
         has_other_sessions = user_id in active_sessions.values()
         if not has_other_sessions:
             # Real-time Broadcast: User is now OFFLINE
@@ -1719,8 +1759,9 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
                 "email": user.email if user else "",
                 "is_online": False,
                 "status": "Offline",
+                "last_online": to_iso_utc(now_dt),
                 "action": "logout",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": to_iso_utc(now_dt),
             })
     response.delete_cookie("maxshow_session")
     return {"message": "You have been logged out."}
@@ -2047,7 +2088,8 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
         b_event_type = resolve_event_type(ev, b.event_title)
 
         b_date = getattr(b, "booking_date", None) or b.created_at
-        booking_date_iso = b_date.isoformat() if b_date else ""
+        booking_date_iso = to_iso_utc(b_date)
+        created_at_iso = to_iso_utc(b.created_at)
 
         booking_item = {
             "id": b.id,
@@ -2071,7 +2113,7 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
             "payment_status": payment_status,
             "payment_id": payment_id,
             "booking_date": booking_date_iso,
-            "created_at": b.created_at.isoformat() if b.created_at else "",
+            "created_at": created_at_iso,
         }
         all_bookings_list.append(booking_item)
         if b.user_id in user_bookings_map:
@@ -2091,7 +2133,7 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
                 "payment_status": payment_status,
                 "payment_id": payment_id,
                 "booking_date": booking_date_iso,
-                "created_at": b.created_at.isoformat() if b.created_at else "",
+                "created_at": created_at_iso,
             })
 
     logged_in_user_ids = set(active_sessions.values())
@@ -2103,7 +2145,7 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
         u_total_spent = sum(item["total"] for item in u_bookings)
         u_ticket_count = sum(item["tickets"] for item in u_bookings)
         is_user_online = (u.id in logged_in_user_ids)
-        last_online_dt = user_last_seen.get(u.id) or u.created_at
+        last_online_dt = user_last_seen.get(u.id) or getattr(u, "last_online", None) or u.created_at
         users_list.append({
             "id": u.id,
             "user_id": u.custom_id or generate_user_custom_id(u.full_name, u.phone_number),
@@ -2111,10 +2153,10 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
             "name": u.full_name,
             "email": u.email,
             "phone": u.phone_number,
-            "created_at": u.created_at.isoformat() if u.created_at else "",
-            "joined_at": u.created_at.isoformat() if u.created_at else "",
-            "last_active": last_online_dt.isoformat() if last_online_dt else "",
-            "last_online": last_online_dt.isoformat() if last_online_dt else "",
+            "created_at": to_iso_utc(u.created_at),
+            "joined_at": to_iso_utc(u.created_at),
+            "last_active": to_iso_utc(last_online_dt),
+            "last_online": to_iso_utc(last_online_dt),
             "total_spent": u_total_spent,
             "ticket_count": u_ticket_count,
             "bookings_count": len(u_bookings),
@@ -2345,8 +2387,8 @@ def get_user_bookings(user_id: int, request: Request, db: Session = Depends(get_
             "total": b.total_amount,
             "payment_status": "Free Entry" if is_free else (getattr(b, "payment_status", None) or "Paid (Razorpay)"),
             "payment_id": "FREE" if is_free else getattr(b, "payment_id", None),
-            "booking_date": b_date.isoformat() if b_date else "",
-            "created_at": b.created_at.isoformat() if b.created_at else "",
+            "booking_date": to_iso_utc(b_date),
+            "created_at": to_iso_utc(b.created_at),
         })
     return {"bookings": results, "count": len(results)}
 
@@ -2655,8 +2697,8 @@ def user_dashboard(request: Request, db: Session = Depends(get_db)) -> dict:
             "total": b.total_amount,
             "payment_status": "Free Entry" if is_free else (getattr(b, "payment_status", None) or "Paid (Razorpay)"),
             "payment_id": "FREE" if is_free else getattr(b, "payment_id", None),
-            "booking_date": b_date.isoformat() if b_date else "",
-            "created_at": b.created_at.isoformat() if b.created_at else "",
+            "booking_date": to_iso_utc(b_date),
+            "created_at": to_iso_utc(b.created_at),
         })
 
     bookmark_results = []
@@ -2667,7 +2709,7 @@ def user_dashboard(request: Request, db: Session = Depends(get_db)) -> dict:
                 "bookmark_id": bm.custom_id or f"BMK-{bm.id:04d}",
                 "event_id": bm.event_id,
                 "event": event_data(bm.event),
-                "created_at": bm.created_at.isoformat() if bm.created_at else "",
+                "created_at": to_iso_utc(bm.created_at),
             })
 
     return {
@@ -2706,8 +2748,8 @@ def list_bookings(request: Request, db: Session = Depends(get_db)) -> dict:
             "total": booking.total_amount,
             "payment_status": "Free Entry" if is_free else (getattr(booking, "payment_status", None) or "Paid (Razorpay)"),
             "payment_id": "FREE" if is_free else getattr(booking, "payment_id", None),
-            "booking_date": b_date.isoformat() if b_date else "",
-            "created_at": booking.created_at.isoformat() if booking.created_at else "",
+            "booking_date": to_iso_utc(b_date),
+            "created_at": to_iso_utc(booking.created_at),
         })
     return {"bookings": results}
 

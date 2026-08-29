@@ -109,14 +109,29 @@ export const validateIndianMobile = (phone) => {
   return { isValid: true, error: '', cleanNumber: digits };
 };
 
+const parseDateSafe = (dateStr) => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? null : dateStr;
+  let str = String(dateStr).trim();
+  // If it's a standard ISO string without timezone indicator, treat as UTC
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(str)) {
+    str = str.replace(' ', 'T');
+    if (!str.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(str)) {
+      str += 'Z';
+    }
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+};
+
 /**
  * Format Booking Date (e.g. "29 Aug 2026")
  */
 export const formatBookingDate = (dateStr) => {
   if (!dateStr) return '—';
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return String(dateStr);
+    const d = parseDateSafe(dateStr);
+    if (!d) return String(dateStr);
     return d.toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'short',
@@ -133,8 +148,8 @@ export const formatBookingDate = (dateStr) => {
 export const formatBookingTime = (dateStr) => {
   if (!dateStr) return '';
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return '';
+    const d = parseDateSafe(dateStr);
+    if (!d) return '';
     return d.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -151,8 +166,8 @@ export const formatBookingTime = (dateStr) => {
 export const formatBookingDateTime = (dateStr) => {
   if (!dateStr) return '—';
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return String(dateStr);
+    const d = parseDateSafe(dateStr);
+    if (!d) return String(dateStr);
     const dateFormatted = d.toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'short',
@@ -168,4 +183,5 @@ export const formatBookingDateTime = (dateStr) => {
     return String(dateStr);
   }
 };
+
 

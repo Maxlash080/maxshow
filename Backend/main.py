@@ -8,6 +8,7 @@ import re
 import secrets
 import urllib.error
 import urllib.request
+import shutil
 from datetime import datetime
 from uuid import uuid4
 from contextlib import asynccontextmanager
@@ -1019,11 +1020,77 @@ async def add_no_cache_headers(request: Request, call_next):
         response.headers["Expires"] = "0"
     return response
 
-INACTIVITY_TIMEOUT_SECONDS = 120  # 2 minutes of idle time before automatic session logout
+SESSION_SECRET = os.getenv("SESSION_SECRET", "maxshow-local-session-secret-2026")
+PRESENCE_ONLINE_TIMEOUT_SECONDS = 120  # User presence is marked Online if active within last 2 minutes
+
 active_sessions: dict[str, int] = {}
-session_last_active: dict[str, float] = {}
 user_last_seen: dict[int, datetime] = {}
+user_online_status: dict[int, bool] = {}
 admin_sessions: set[str] = set()
+
+
+def create_user_session_token(user_id: int) -> str:
+    ts = str(int(time.time()))
+    payload = f"{user_id}:{ts}"
+    sig = hmac.new(SESSION_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def verify_user_session_token(token: str | None) -> int | None:
+    if not token or not isinstance(token, str):
+        return None
+    token = token.strip()
+    if not token:
+        return None
+    if token in active_sessions:
+        return active_sessions[token]
+    parts = token.split(":")
+    if len(parts) != 3:
+        return None
+    user_id_str, ts_str, sig = parts
+    payload = f"{user_id_str}:{ts_str}"
+    expected_sig = hmac.new(SESSION_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        return None
+    try:
+        user_id = int(user_id_str)
+        created_ts = int(ts_str)
+        # 30 days valid session
+        if time.time() - created_ts > 86400 * 30:
+            return None
+        return user_id
+    except (ValueError, TypeError):
+        return None
+
+
+def create_admin_session_token(admin_username: str = "admin") -> str:
+    ts = str(int(time.time()))
+    payload = f"admin:{admin_username}:{ts}"
+    sig = hmac.new(SESSION_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def verify_admin_session_token(token: str | None) -> bool:
+    if not token or not isinstance(token, str):
+        return False
+    token = token.strip()
+    if token in admin_sessions:
+        return True
+    parts = token.split(":")
+    if len(parts) != 4 or parts[0] != "admin":
+        return False
+    _, admin_username, ts_str, sig = parts
+    payload = f"admin:{admin_username}:{ts_str}"
+    expected_sig = hmac.new(SESSION_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        return False
+    try:
+        created_ts = int(ts_str)
+        if time.time() - created_ts > 86400 * 30:
+            return False
+        return True
+    except (ValueError, TypeError):
+        return False
 
 
 class AdminNotificationBroker:
@@ -1071,35 +1138,17 @@ admin_broker = AdminNotificationBroker()
 
 
 def cleanup_inactive_sessions():
-    """Scans active_sessions and removes any that exceeded INACTIVITY_TIMEOUT_SECONDS, broadcasting offline status."""
-    now = time.time()
-    expired_tokens = []
-    for token, uid in list(active_sessions.items()):
-        last_time = session_last_active.get(token)
-        if last_time is None:
-            session_last_active[token] = now
-        elif now - last_time > INACTIVITY_TIMEOUT_SECONDS:
-            expired_tokens.append(token)
-
-    if not expired_tokens:
-        return
-
-    affected_users = set()
-    for token in expired_tokens:
-        uid = active_sessions.pop(token, None)
-        session_last_active.pop(token, None)
-        if uid:
-            affected_users.add(uid)
-
-    for uid in affected_users:
-        if uid not in active_sessions.values():
+    """Scans users and marks presence status as Offline if inactive for more than PRESENCE_ONLINE_TIMEOUT_SECONDS without destroying authentication session."""
+    now = datetime.now()
+    for uid, last_dt in list(user_last_seen.items()):
+        is_online = user_online_status.get(uid, False)
+        if is_online and (now - last_dt).total_seconds() > PRESENCE_ONLINE_TIMEOUT_SECONDS:
+            user_online_status[uid] = False
             try:
                 with SessionLocal() as db:
                     u = db.get(User, uid)
                     if u:
-                        now_dt = datetime.now()
-                        u.last_online = now_dt
-                        user_last_seen[uid] = now_dt
+                        u.last_online = last_dt
                         db.commit()
                         admin_broker.broadcast_sync("user_status_changed", {
                             "user_id": uid,
@@ -1109,56 +1158,56 @@ def cleanup_inactive_sessions():
                             "email": u.email,
                             "is_online": False,
                             "status": "Offline",
-                            "last_online": to_iso_utc(now_dt),
+                            "last_online": to_iso_utc(last_dt),
                             "action": "inactivity_timeout",
-                            "timestamp": to_iso_utc(now_dt),
+                            "timestamp": to_iso_utc(now),
                         })
             except Exception as e:
                 print(f"[Cleanup Inactive Sessions Error]: {e}")
 
 
-def touch_session(session_token: str | None) -> int | None:
-    """Refreshes last_active for a session if valid; expires session and broadcasts offline if timed out."""
-    if not session_token or session_token not in active_sessions:
+def touch_session(session_token: str | None, db: Session = None) -> int | None:
+    """Refreshes last_active for a session if valid. Preserves 30-day session across page refreshes."""
+    user_id = verify_user_session_token(session_token)
+    if not user_id:
         return None
-    now = time.time()
-    last_time = session_last_active.get(session_token, now)
-    if now - last_time > INACTIVITY_TIMEOUT_SECONDS:
-        uid = active_sessions.pop(session_token, None)
-        session_last_active.pop(session_token, None)
-        if uid and uid not in active_sessions.values():
-            try:
-                with SessionLocal() as db:
-                    u = db.get(User, uid)
-                    if u:
-                        now_dt = datetime.now()
-                        u.last_online = now_dt
-                        user_last_seen[uid] = now_dt
-                        db.commit()
-                        admin_broker.broadcast_sync("user_status_changed", {
-                            "user_id": uid,
-                            "custom_id": u.custom_id or f"USR-{uid}",
-                            "name": u.full_name,
-                            "username": u.username or "user",
-                            "email": u.email,
-                            "is_online": False,
-                            "status": "Offline",
-                            "last_online": to_iso_utc(now_dt),
-                            "action": "inactivity_timeout",
-                            "timestamp": to_iso_utc(now_dt),
-                        })
-            except Exception as e:
-                print(f"[Touch Session Expire Error]: {e}")
-        return None
-    session_last_active[session_token] = now
-    uid = active_sessions.get(session_token)
-    if uid:
-        user_last_seen[uid] = datetime.now()
-    return uid
+
+    now_dt = datetime.now()
+    user_last_seen[user_id] = now_dt
+    was_online = user_online_status.get(user_id, False)
+    user_online_status[user_id] = True
+
+    if not was_online:
+        target_db = db or SessionLocal()
+        should_close = (db is None)
+        try:
+            u = target_db.get(User, user_id)
+            if u:
+                u.last_online = now_dt
+                target_db.commit()
+                admin_broker.broadcast_sync("user_status_changed", {
+                    "user_id": u.id,
+                    "custom_id": u.custom_id or f"USR-{u.id}",
+                    "name": u.full_name,
+                    "username": u.username or "user",
+                    "email": u.email,
+                    "is_online": True,
+                    "status": "Online",
+                    "last_online": to_iso_utc(now_dt),
+                    "action": "active",
+                    "timestamp": to_iso_utc(now_dt),
+                })
+        except Exception as e:
+            print(f"[Touch Session Presence Error]: {e}")
+        finally:
+            if should_close:
+                target_db.close()
+
+    return user_id
 
 
 async def session_cleanup_loop():
-    """Background loop that periodically checks for inactive sessions and marks users offline."""
+    """Background loop that periodically checks for inactive user presence and updates admin dashboard."""
     while True:
         try:
             await asyncio.sleep(5)
@@ -1270,7 +1319,7 @@ def get_or_create_user_for_booking(
 
 def require_admin(request: Request) -> None:
     token = request.cookies.get("maxshow_admin_session") or request.query_params.get("token") or request.query_params.get("admin_token")
-    if not token or token not in admin_sessions:
+    if not token or not verify_admin_session_token(token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin sign-in required.")
 
 
@@ -1692,10 +1741,10 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
             detail="Invalid email/username or password. Please check your credentials.",
         )
 
-    session_token = secrets.token_urlsafe(32)
+    session_token = create_user_session_token(matched_user.id)
     active_sessions[session_token] = matched_user.id
-    session_last_active[session_token] = time.time()
-    response.set_cookie("maxshow_session", session_token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False)
+    touch_session(session_token, db)
+    response.set_cookie("maxshow_session", session_token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False, path="/")
 
     # Real-time Broadcast: User is now ONLINE
     admin_broker.broadcast_sync("user_status_changed", {
@@ -1721,16 +1770,16 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> dict:
 @app.post("/api/auth/heartbeat")
 @app.get("/api/auth/heartbeat")
 def user_heartbeat(request: Request, db: Session = Depends(get_db)) -> dict:
-    """Refreshes the user's active session timestamp to prevent inactivity timeout while actively browsing."""
+    """Refreshes the user's active session timestamp."""
     session_token = request.cookies.get("maxshow_session")
-    user_id = touch_session(session_token)
+    user_id = touch_session(session_token, db)
     if user_id:
         user = db.get(User, user_id)
         return {
             "status": "active",
             "user_id": user_id,
             "username": user.username if user else None,
-            "last_active": session_last_active.get(session_token, time.time()),
+            "last_active": to_iso_utc(user_last_seen.get(user_id, datetime.now())),
         }
     return {"status": "inactive"}
 
@@ -1738,32 +1787,31 @@ def user_heartbeat(request: Request, db: Session = Depends(get_db)) -> dict:
 @app.post("/api/auth/logout")
 def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.pop(session_token, None) if session_token else None
+    user_id = verify_user_session_token(session_token)
     if session_token:
-        session_last_active.pop(session_token, None)
+        active_sessions.pop(session_token, None)
     if user_id:
-        user = db.get(User, user_id)
+        user_online_status[user_id] = False
         now_dt = datetime.now()
         user_last_seen[user_id] = now_dt
+        user = db.get(User, user_id)
         if user:
             user.last_online = now_dt
             db.commit()
-        has_other_sessions = user_id in active_sessions.values()
-        if not has_other_sessions:
-            # Real-time Broadcast: User is now OFFLINE
-            admin_broker.broadcast_sync("user_status_changed", {
-                "user_id": user_id,
-                "custom_id": user.custom_id if user else f"USR-{user_id}",
-                "name": user.full_name if user else "User",
-                "username": user.username if user else "user",
-                "email": user.email if user else "",
-                "is_online": False,
-                "status": "Offline",
-                "last_online": to_iso_utc(now_dt),
-                "action": "logout",
-                "timestamp": to_iso_utc(now_dt),
-            })
-    response.delete_cookie("maxshow_session")
+        # Real-time Broadcast: User is now OFFLINE
+        admin_broker.broadcast_sync("user_status_changed", {
+            "user_id": user_id,
+            "custom_id": user.custom_id if user else f"USR-{user_id}",
+            "name": user.full_name if user else "User",
+            "username": user.username if user else "user",
+            "email": user.email if user else "",
+            "is_online": False,
+            "status": "Offline",
+            "last_online": to_iso_utc(now_dt),
+            "action": "logout",
+            "timestamp": to_iso_utc(now_dt),
+        })
+    response.delete_cookie("maxshow_session", path="/")
     return {"message": "You have been logged out."}
 
 
@@ -1867,9 +1915,9 @@ def admin_login(payload: AdminLoginRequest, response: Response, db: Session = De
     if not password_matches:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin credentials.")
     
-    token = secrets.token_urlsafe(32)
+    token = create_admin_session_token(uname)
     admin_sessions.add(token)
-    response.set_cookie("maxshow_admin_session", token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False)
+    response.set_cookie("maxshow_admin_session", token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False, path="/")
     return {"message": "Admin sign-in successful."}
 
 
@@ -1879,7 +1927,7 @@ def admin_logout(request: Request, response: Response) -> dict:
     token = request.cookies.get("maxshow_admin_session")
     if token:
         admin_sessions.discard(token)
-    response.delete_cookie("maxshow_admin_session")
+    response.delete_cookie("maxshow_admin_session", path="/")
     return {"message": "Admin logged out."}
 
 
@@ -2011,8 +2059,10 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
 
 def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id: str = None, slug: str = "") -> str:
     """
-    Ensures any event image is saved as a physical static file named by event ID
-    (e.g., /uploads/event_1.jpg) inside Backend/uploads/.
+    Ensures any event image is saved as a physical static file inside Backend/uploads/.
+    If already an uploaded local static file (e.g. /uploads/<uuid>.<ext> or /uploads/event_1.jpg),
+    preserves the path directly so browser caches immediately receive the new unique URL.
+    If an external HTTP/HTTPS URL, downloads and stores it locally with a unique UUID.
     """
     if not image_val or not image_val.strip():
         return f"/uploads/event_{event_id}.jpg" if event_id else "/uploads/event_1.jpg"
@@ -2021,28 +2071,7 @@ def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id:
     upload_dir = BASE_DIR / "uploads"
     upload_dir.mkdir(exist_ok=True)
 
-    if event_id:
-        target_stem = f"event_{event_id}"
-    elif custom_id:
-        target_stem = f"event_{custom_id.lower()}"
-    else:
-        clean_slug = re.sub(r"[^a-z0-9]+", "_", (slug or "event").lower()).strip("_")[:20]
-        target_stem = f"event_{clean_slug}"
-
     if image_val.startswith("/uploads/"):
-        src_name = os.path.basename(image_val)
-        src_file = upload_dir / src_name
-        if event_id:
-            ext = os.path.splitext(src_name)[1] or ".jpg"
-            target_name = f"{target_stem}{ext}"
-            target_file = upload_dir / target_name
-            if src_file.exists() and src_file != target_file:
-                try:
-                    shutil.copy2(src_file, target_file)
-                except Exception as e:
-                    print(f"[Image Rename Error] {e}")
-            if target_file.exists():
-                return f"/uploads/{target_name}"
         return image_val
 
     if image_val.startswith("http://") or image_val.startswith("https://"):
@@ -2058,20 +2087,21 @@ def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id:
             elif clean_url.endswith(".jpeg"):
                 ext = ".jpeg"
 
-            target_name = f"{target_stem}{ext}"
-            target_path = upload_dir / target_name
+            filename = f"{uuid4().hex}{ext}"
+            target_path = upload_dir / filename
             req = urllib.request.Request(
                 image_val,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 target_path.write_bytes(resp.read())
-            return f"/uploads/{target_name}"
+            return f"/uploads/{filename}"
         except Exception as e:
             print(f"[Image Local Store Warning] Could not cache remote image: {e}")
             return image_val
 
     return image_val
+
 
 
 @app.get("/api/events")

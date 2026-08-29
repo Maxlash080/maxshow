@@ -203,55 +203,117 @@ export const BookingPage = () => {
       <main className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8 py-8 space-y-8 flex-1">
         {/* Success Confirmation View */}
         {confirmedBooking ? (
-          <div className="rounded-[2.5rem] bg-white p-8 sm:p-12 text-center shadow-soft dark:bg-[#1c2733] border border-stone-200/80 dark:border-slate-700 space-y-6 animate-in zoom-in-95 duration-200">
-            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-emerald-100 text-4xl text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
-              ✓
-            </div>
-            <div>
-              <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 px-3 py-1 text-xs font-black">
-                Booking Confirmed
-              </span>
-              <h1 className="mt-3 text-3xl sm:text-4xl font-black text-ink dark:text-white">
-                You're all set!
-              </h1>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-semibold">
-                Your entry ticket has been issued and linked to your booking code.
-              </p>
-            </div>
-
-            {/* QR Code */}
-            <div className="p-4 bg-white rounded-3xl inline-block shadow-sm border border-stone-200">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                  confirmedBooking.booking_code
-                )}`}
-                alt="Ticket QR Code"
-                className="h-44 w-44 mx-auto"
-              />
-            </div>
-
-            <div className="rounded-2xl bg-stone-50 dark:bg-[#151f2b] p-4 max-w-sm mx-auto text-xs space-y-1.5 text-left">
-              <p className="font-mono text-sm font-black text-coral text-center mb-2">
+          <div className="mx-auto w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-7 shadow-soft dark:bg-[#1c2733] border border-stone-200/80 dark:border-slate-700 space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Top Compact Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-stone-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-100 text-xl text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0">
+                  ✓
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-black text-ink dark:text-white">
+                      You're all set!
+                    </h2>
+                    <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider">
+                      Confirmed
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Your digital ticket is ready and linked to your booking code.
+                  </p>
+                </div>
+              </div>
+              <span className="hidden sm:inline-flex rounded-full bg-coral/10 dark:bg-coral/20 px-3 py-1 text-xs font-mono font-bold text-coral border border-coral/20">
                 #{confirmedBooking.booking_code}
-              </p>
-              <p className="text-slate-500"><strong>Event:</strong> {confirmedBooking.title}</p>
-              <p className="text-slate-500"><strong>Booking Date:</strong> {formatBookingDateTime(confirmedBooking.booking_date || new Date())}</p>
-              <p className="text-slate-500"><strong>Passes:</strong> {confirmedBooking.tickets} Ticket(s)</p>
-              <p className="text-slate-500"><strong>Total Paid:</strong> {confirmedBooking.total === 0 ? 'Free Entry' : formatPrice(confirmedBooking.total)}</p>
+              </span>
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
-              <Link
-                to="/dashboard"
-                className="rounded-2xl bg-coral px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-[#df503c] transition"
-              >
-                View in Dashboard →
-              </Link>
+            {/* Split Content: QR Code (Left) + Ticket Details (Right) */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+              {/* QR Code Container (5 cols) */}
+              <div className="sm:col-span-5 flex flex-col items-center justify-center p-3.5 rounded-2xl bg-stone-50 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800 text-center">
+                <div className="p-2 bg-white rounded-2xl shadow-sm border border-stone-200">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
+                      confirmedBooking.booking_code
+                    )}`}
+                    alt="Ticket QR Code"
+                    className="h-28 w-28 sm:h-32 sm:w-32 object-contain"
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                  Scan at venue entrance
+                </p>
+                <span className="mt-0.5 sm:hidden font-mono text-xs font-bold text-coral">
+                  #{confirmedBooking.booking_code}
+                </span>
+              </div>
+
+              {/* Ticket Details (7 cols) */}
+              <div className="sm:col-span-7 space-y-2 text-xs">
+                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Experience</p>
+                      <h3 className="font-black text-sm text-ink dark:text-white line-clamp-1">
+                        {confirmedBooking.title}
+                      </h3>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase shrink-0 ${
+                        confirmedBooking.total === 0
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                      }`}
+                    >
+                      {confirmedBooking.total === 0 ? 'Free Pass' : 'Paid'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-stone-200/60 dark:border-slate-800 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Date & Time</span>
+                      <span className="font-bold text-ink dark:text-slate-200">
+                        {formatBookingDateTime(confirmedBooking.booking_date || new Date())}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Location</span>
+                      <span className="font-bold text-ink dark:text-slate-200 truncate block" title={confirmedBooking.location}>
+                        {confirmedBooking.location || 'MAXSHOW Venue'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Passes Reserved</span>
+                      <span className="font-bold text-ink dark:text-slate-200">
+                        {confirmedBooking.tickets} Ticket{confirmedBooking.tickets > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Total Amount</span>
+                      <span className="font-bold text-coral">
+                        {confirmedBooking.total === 0 ? 'Free Entry (₹0)' : formatPrice(confirmedBooking.total)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-end gap-2.5 pt-3 border-t border-stone-100 dark:border-slate-800">
               <Link
                 to="/"
-                className="rounded-2xl border border-stone-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 hover:bg-stone-50 transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300"
+                className="rounded-xl border border-stone-300 bg-white px-5 py-2 text-xs sm:text-sm font-bold text-slate-700 hover:bg-stone-50 transition text-center dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300"
               >
                 Back to Home
+              </Link>
+              <Link
+                to="/dashboard"
+                className="rounded-xl bg-coral px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#df503c] transition text-center"
+              >
+                View in Dashboard →
               </Link>
             </div>
           </div>

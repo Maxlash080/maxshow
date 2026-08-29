@@ -112,6 +112,8 @@ export const AdminDashboard = () => {
   // Lock background scroll when any modal is open
   useLockBodyScroll(Boolean(selectedUser || isEventModalOpen));
 
+  const [eventViewMode, setEventViewMode] = useState('grid'); // 'grid' | 'table'
+
   const [eventFormData, setEventFormData] = useState({
     title: '',
     slug: '',
@@ -529,6 +531,25 @@ export const AdminDashboard = () => {
     setIsEventModalOpen(true);
   };
 
+  const handleDuplicateEvent = (ev) => {
+    setEditingEvent(null);
+    setEventFormData({
+      title: `${ev.title || 'Event'} (Copy)`,
+      slug: '',
+      type: ev.type || ev.event_type || 'Live music',
+      category: ev.category || 'music',
+      venue: ev.venue || '',
+      location: ev.location || 'Hinjawadi, Pune',
+      date: ev.date || (ev.time?.split(' ')[0] || new Date().toISOString().split('T')[0]),
+      clock: ev.clock || (ev.time?.split(' ')[1] || '20:00'),
+      price: ev.price !== undefined ? ev.price : 499,
+      image: ev.image || '',
+      description: ev.description || '',
+    });
+    setIsEventModalOpen(true);
+    showToast(`Duplicating "${ev.title}". Update details and save!`);
+  };
+
   // Save Event (Add or Edit)
   const handleSaveEvent = async (e) => {
     e.preventDefault();
@@ -572,8 +593,12 @@ export const AdminDashboard = () => {
         showToast('New event created and published! 🎉');
       }
 
+      try {
+        sessionStorage.removeItem('MAXSHOW_EVENTS_CACHE');
+      } catch (_) {}
+
       setIsEventModalOpen(false);
-      fetchAdminData();
+      await fetchAdminData();
     } catch (err) {
       showToast(err.message || 'Failed to save event');
     } finally {
@@ -786,26 +811,29 @@ export const AdminDashboard = () => {
       )}
 
       {/* Admin Navbar */}
-      <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-cream/95 backdrop-blur dark:bg-[#1c2733]/95 dark:border-slate-800">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 w-full border-b border-stone-200/70 bg-white/80 backdrop-blur-xl dark:bg-[#101820]/80 dark:border-white/[0.08] transition-colors duration-200">
+        <div className="mx-auto flex h-16 sm:h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          {/* Brand Logo & Admin Badge */}
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2.5 group">
               <img
                 src="/logo.png"
                 alt="MAXSHOW Logo"
-                className="h-10 w-10 rounded-2xl object-cover shadow-sm ring-1 ring-black/5 dark:ring-white/10 transition-transform group-hover:scale-105"
+                className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl object-cover ring-1 ring-black/10 dark:ring-white/15 transition-transform duration-200 group-hover:scale-105 shadow-sm"
               />
-              <span className="text-xl font-black tracking-tight text-ink dark:text-white">MAXSHOW</span>
+              <span className="text-xl font-black tracking-tight text-ink dark:text-white">
+                MAXSHOW
+              </span>
             </Link>
-            <span className="rounded-full bg-coral px-3 py-0.5 text-xs font-black uppercase tracking-wider text-white">
-              ADMIN CENTRE
+            <span className="rounded-full bg-coral/10 dark:bg-coral/20 border border-coral/30 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-coral">
+              ADMIN
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             {/* Live SSE Sync Status Badge */}
             <div
-              className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold shadow-sm backdrop-blur transition ${
+              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold shadow-xs backdrop-blur transition ${
                 liveStatus === 'connected'
                   ? 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
                   : liveStatus === 'connecting'
@@ -821,21 +849,21 @@ export const AdminDashboard = () => {
               }
             >
               {liveStatus === 'connected' ? (
-                <span className="relative flex h-2.5 w-2.5">
+                <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
               ) : liveStatus === 'connecting' ? (
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
               ) : (
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
+                <span className="h-2 w-2 rounded-full bg-slate-400"></span>
               )}
-              <span className="whitespace-nowrap">
+              <span className="whitespace-nowrap text-[11px] sm:text-xs">
                 {liveStatus === 'connected'
-                  ? 'Live Sync Active'
+                  ? 'Live Sync'
                   : liveStatus === 'connecting'
                   ? 'Connecting...'
-                  : 'Live Polling'}
+                  : 'Polling'}
               </span>
             </div>
 
@@ -844,27 +872,33 @@ export const AdminDashboard = () => {
               to="/"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-full border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition shadow-sm dark:border-slate-700 dark:bg-[#101820] dark:text-slate-200 dark:hover:border-coral dark:hover:text-coral"
+              className="flex items-center gap-1.5 rounded-full border border-stone-200/90 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-1 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition-all shadow-xs dark:text-slate-200 dark:hover:border-coral dark:hover:text-coral"
               title="Open MAXSHOW Website Home Page to check live events"
             >
-              <span>🌐</span>
-              <span>Website</span>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              <span className="hidden sm:inline">Website</span>
             </Link>
 
             {/* Test Live Trigger Button */}
             <button
               onClick={handleTestLiveAlert}
               disabled={testingLive}
-              className="flex items-center gap-1.5 rounded-full border border-purple-300 bg-purple-50 px-3.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-300 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-full border border-purple-200 dark:border-purple-900/50 bg-purple-50/90 dark:bg-purple-950/40 px-3 py-1 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all dark:text-purple-300 dark:hover:bg-purple-900/40 disabled:opacity-50 shadow-xs active:scale-95"
               title="Trigger a simulated real-time user registration to preview the live experience"
             >
-              <span>🧪</span>
-              <span className="hidden sm:inline">{testingLive ? 'Simulating...' : 'Test Live Alert'}</span>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 2v7.31L4.69 18.5a2 2 0 0 0 1.62 3.5h11.38a2 2 0 0 0 1.62-3.5L14 9.31V2" />
+              </svg>
+              <span className="hidden sm:inline">{testingLive ? 'Simulating...' : 'Test Alert'}</span>
             </button>
 
             <button
               onClick={handleAdminSignOut}
-              className="rounded-full bg-ink px-4 py-2 text-xs font-bold text-white hover:bg-red-600 transition dark:bg-slate-700 dark:hover:bg-red-600"
+              className="rounded-full border border-stone-200/90 dark:border-white/10 bg-stone-100 dark:bg-white/10 hover:!bg-red-600 hover:!text-white hover:!border-red-600 px-3.5 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all shadow-xs active:scale-95 cursor-pointer"
             >
               Sign out
             </button>
@@ -959,29 +993,33 @@ export const AdminDashboard = () => {
 
         {/* TAB 1: Events Catalogue */}
         {activeTab === 'events' && (
-          <section className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative flex items-center w-full sm:w-72">
-                  <span className="absolute left-3 text-slate-400 dark:text-slate-500 text-sm pointer-events-none">🔍</span>
+          <section className="space-y-5">
+            {/* Filter & Action Controls Toolbar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 bg-white/70 dark:bg-[#182330]/70 p-3 sm:p-4 rounded-3xl border border-stone-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                {/* Search Input */}
+                <div className="relative flex items-center flex-1 min-w-[220px] sm:max-w-xs">
+                  <span className="absolute left-3.5 text-slate-400 dark:text-slate-500 text-sm pointer-events-none">🔍</span>
                   <input
                     type="text"
                     value={eventSearch}
                     onChange={(e) => setEventSearch(e.target.value)}
                     placeholder="Search events by title, venue..."
-                    className="w-full rounded-xl border border-stone-300 bg-white pl-9 pr-8 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white shadow-sm"
+                    className="w-full rounded-2xl border border-stone-200/90 bg-white pl-9 pr-8 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-white/10 dark:bg-[#101820] dark:text-white shadow-2xs"
                   />
                   {eventSearch && (
                     <button
                       type="button"
                       onClick={() => setEventSearch('')}
-                      className="absolute right-2.5 text-xs text-slate-400 hover:text-ink dark:hover:text-white"
+                      className="absolute right-3 text-xs text-slate-400 hover:text-ink dark:hover:text-white"
                     >
                       ✕
                     </button>
                   )}
                 </div>
-                <div className="w-40 sm:w-48">
+
+                {/* Category Filter */}
+                <div className="w-36 sm:w-44">
                   <CategoryDropdown
                     value={eventCategoryFilter}
                     onChange={(val) => setEventCategoryFilter(val)}
@@ -989,7 +1027,9 @@ export const AdminDashboard = () => {
                     allLabel="All Categories"
                   />
                 </div>
-                <div className="w-40 sm:w-48">
+
+                {/* Location Filter */}
+                <div className="w-36 sm:w-44">
                   <LocationFilterDropdown
                     value={eventLocationFilter}
                     onChange={(val) => setEventLocationFilter(val)}
@@ -1000,111 +1040,219 @@ export const AdminDashboard = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* Right Side: Add Event */}
+              <div className="flex items-center gap-2 self-end lg:self-auto">
                 <button
                   onClick={handleOpenAddEvent}
-                  className="flex items-center gap-2 rounded-2xl bg-coral px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-[#df503c] transition"
+                  className="flex items-center gap-1.5 rounded-2xl bg-coral px-4 sm:px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-coral/25 hover:bg-[#df503c] transition active:scale-95 cursor-pointer"
                 >
-                  <span>＋</span>
-                  <span>Add New Event</span>
+                  <span className="text-base leading-none">＋</span>
+                  <span>Add Event</span>
                 </button>
               </div>
             </div>
 
-            {/* Events Grid */}
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {loading && events.length === 0 ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={`skeleton-event-${i}`}
-                    className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white p-4 shadow-sm dark:border-slate-700/80 dark:bg-[#1c2733] animate-pulse space-y-4"
+            {/* Empty State */}
+            {filteredEvents.length === 0 && !loading ? (
+              <div className="rounded-3xl border border-dashed border-stone-300 dark:border-slate-700 p-12 text-center space-y-3 bg-white/50 dark:bg-[#1c2733]/50">
+                <span className="text-5xl">🎪</span>
+                <h4 className="font-black text-ink dark:text-white text-lg">No matching events found</h4>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                  {eventSearch || eventCategoryFilter !== 'all' || eventLocationFilter !== 'all'
+                    ? 'No events match your current search and filter criteria.'
+                    : 'No events have been created yet. Click "Add Event" to create your first listing!'}
+                </p>
+                {(eventSearch || eventCategoryFilter !== 'all' || eventLocationFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEventSearch('');
+                      setEventCategoryFilter('all');
+                      setEventLocationFilter('all');
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-coral px-4 py-2 text-xs font-bold text-white hover:bg-[#df503c] transition shadow-sm"
                   >
-                    <div className="h-44 w-full rounded-2xl bg-stone-200 dark:bg-slate-700" />
-                    <div className="space-y-2">
-                      <div className="h-4 w-3/4 rounded bg-stone-200 dark:bg-slate-700" />
-                      <div className="h-3 w-1/2 rounded bg-stone-200 dark:bg-slate-700" />
-                    </div>
-                  </div>
-                ))
-              ) : filteredEvents.length === 0 ? (
-                <div className="sm:col-span-2 lg:col-span-3 rounded-3xl border border-dashed border-stone-300 dark:border-slate-700 p-10 text-center space-y-3 bg-white/50 dark:bg-[#1c2733]/50">
-                  <span className="text-4xl">🎪</span>
-                  <h4 className="font-black text-ink dark:text-white text-base">No published events found</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                    {eventSearch || eventCategoryFilter !== 'all' || eventLocationFilter !== 'all'
-                      ? 'No events match your current search and filter criteria.'
-                      : 'No events have been created yet.'}
-                  </p>
-                  {(eventSearch || eventCategoryFilter !== 'all' || eventLocationFilter !== 'all') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEventSearch('');
-                        setEventCategoryFilter('all');
-                        setEventLocationFilter('all');
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-coral px-4 py-2 text-xs font-bold text-white hover:bg-[#df503c] transition shadow-sm"
-                    >
-                      Clear All Filters
-                    </button>
-                  )}
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            ) : eventViewMode === 'table' ? (
+              /* COMPACT TABLE VIEW */
+              <div className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#182330]">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className="border-b border-stone-200/80 bg-stone-50/80 text-[11px] font-black uppercase tracking-wider text-slate-400 dark:border-white/10 dark:bg-white/[0.03]">
+                      <tr>
+                        <th className="px-5 py-3.5">Event Details</th>
+                        <th className="px-4 py-3.5">Category</th>
+                        <th className="px-4 py-3.5">Location</th>
+                        <th className="px-4 py-3.5">Date & Time</th>
+                        <th className="px-4 py-3.5">Price</th>
+                        <th className="px-4 py-3.5">Tickets</th>
+                        <th className="px-5 py-3.5 text-right">Quick Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100 dark:divide-white/[0.06]">
+                      {filteredEvents.map((ev) => (
+                        <tr
+                          key={ev.id || ev.slug}
+                          className="hover:bg-stone-50/80 dark:hover:bg-white/[0.02] transition-colors group"
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={ev.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=300&q=80'}
+                                alt={ev.title}
+                                className="h-11 w-11 rounded-xl object-cover ring-1 ring-black/5 dark:ring-white/10 shrink-0"
+                                onError={(e) => {
+                                  e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=300&q=80';
+                                }}
+                              />
+                              <div className="min-w-0 max-w-[200px] sm:max-w-xs">
+                                <p className="font-bold text-ink dark:text-white truncate" title={ev.title}>
+                                  {ev.title}
+                                </p>
+                                <span className="text-[11px] font-semibold text-slate-400 capitalize">
+                                  {ev.type || ev.event_type || 'Event'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50 uppercase">
+                              {ev.category || 'Event'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <p className="font-semibold text-ink dark:text-slate-200 text-xs truncate max-w-[150px]">
+                              {ev.venue || 'Main Hall'}
+                            </p>
+                            <p className="text-[11px] text-slate-400">{ev.location || 'Pune'}</p>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <p className="font-semibold text-ink dark:text-slate-200 text-xs">
+                              {formatEventTime(ev.time, ev.day)}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
+                              Number(ev.price) === 0
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60'
+                                : 'bg-coral/10 text-coral dark:bg-coral/20 border border-coral/20 font-black'
+                            }`}>
+                              {formatPrice(ev.price)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              {ev.tickets_sold || 0}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditEvent(ev)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200/90 dark:border-white/10 bg-white dark:bg-white/5 hover:border-coral hover:text-coral text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+                                title="Edit this event"
+                              >
+                                <span>✏️</span>
+                                <span className="hidden sm:inline">Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEvent(ev)}
+                                className="p-1.5 rounded-xl border border-stone-200/90 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-red-50 hover:border-red-300 text-red-500 text-xs font-bold transition shadow-2xs dark:hover:bg-red-950/40 cursor-pointer"
+                                title="Delete this event"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ) : (
-                filteredEvents.map((ev) => (
+              </div>
+            ) : (
+              /* GRID CARDS VIEW */
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredEvents.map((ev) => (
                   <div
                     key={ev.id || ev.slug}
-                    className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-sm transition hover:shadow-md dark:border-slate-700/80 dark:bg-[#1c2733]"
+                    className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-sm transition-all hover:shadow-lg dark:border-white/10 dark:bg-[#182330] hover:-translate-y-0.5"
                   >
                     <div>
+                      {/* Image Header with Price & Type Overlay */}
                       <div className="relative h-48 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                         <img
                           src={ev.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80'}
                           alt={ev.title}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={(e) => {
                             e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
                           }}
                         />
-                        <div className="absolute top-3 left-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                        <div className="absolute top-3 left-3 rounded-full bg-black/75 px-3 py-1 text-[11px] font-extrabold text-white backdrop-blur-md shadow-xs">
                           {ev.type || ev.event_type || 'Event'}
                         </div>
-                        <div className="absolute top-3 right-3 rounded-full bg-coral px-2.5 py-1 text-[11px] font-bold text-white">
+                        <div className="absolute top-3 right-3 rounded-full bg-coral px-3 py-1 text-[11px] font-black text-white shadow-md shadow-coral/30">
                           {formatPrice(ev.price)}
                         </div>
                       </div>
-                      <div className="p-5">
-                        <h3 className="text-base font-black text-ink dark:text-white line-clamp-1">{ev.title}</h3>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">📍 {ev.venue || ev.location}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          🕒 {formatEventTime(ev.time, ev.day)}
+
+                      {/* Content Section */}
+                      <div className="p-5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50">
+                            {ev.category || 'General'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-400">
+                            👥 {ev.tickets_sold || 0} tickets sold
+                          </span>
+                        </div>
+
+                        <h3 className="text-base font-black text-ink dark:text-white line-clamp-1 group-hover:text-coral transition-colors">
+                          {ev.title}
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <span>📍</span>
+                          <span className="truncate">{ev.venue || ev.location}</span>
                         </p>
-                        <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{ev.description}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <span>🕒</span>
+                          <span>{formatEventTime(ev.time, ev.day)}</span>
+                        </p>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 pt-1 border-t border-stone-100 dark:border-white/5">
+                          {ev.description || 'No description provided.'}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/60 p-4 dark:border-slate-700/60 dark:bg-[#101820]">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                        {ev.tickets_sold || 0} tickets sold
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleOpenEditEvent(ev)}
-                          className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteEvent(ev)}
-                          className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#1c2733]"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                    {/* Card Footer Actions */}
+                    <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/80 p-3 sm:p-4 dark:border-white/5 dark:bg-white/[0.02]">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditEvent(ev)}
+                        className="flex items-center gap-1 rounded-xl border border-stone-200/90 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition shadow-2xs dark:border-white/10 dark:bg-white/5 dark:text-slate-200 cursor-pointer"
+                      >
+                        <span>✏️</span>
+                        <span>Edit</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEvent(ev)}
+                        className="rounded-xl border border-stone-200/90 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition shadow-2xs dark:border-white/10 dark:bg-white/5 dark:hover:bg-red-950/40 cursor-pointer"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -1621,8 +1769,9 @@ export const AdminDashboard = () => {
                 {editingEvent ? 'Edit Event Listing' : 'Create New Event Listing'}
               </h3>
               <button
+                type="button"
                 onClick={() => setIsEventModalOpen(false)}
-                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-white transition"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-white transition cursor-pointer"
               >
                 ✕
               </button>
@@ -1647,7 +1796,7 @@ export const AdminDashboard = () => {
                   type="text"
                   value={eventFormData.type}
                   onChange={(e) => setEventFormData({ ...eventFormData, type: e.target.value })}
-                  placeholder="e.g. Live music, Comedy"
+                  placeholder="Live music"
                   className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                 />
               </div>
@@ -1708,8 +1857,9 @@ export const AdminDashboard = () => {
                   type="number"
                   min="0"
                   value={eventFormData.price}
-                  onChange={(e) => setEventFormData({ ...eventFormData, price: Number(e.target.value) })}
+                  onChange={(e) => setEventFormData({ ...eventFormData, price: Math.max(0, Number(e.target.value) || 0) })}
                   className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  placeholder="499"
                 />
               </div>
 
@@ -1737,14 +1887,14 @@ export const AdminDashboard = () => {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="rounded-xl bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-sm hover:bg-stone-100 transition"
+                        className="rounded-xl bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-sm hover:bg-stone-100 transition cursor-pointer"
                       >
                         Change Photo
                       </button>
                       <button
                         type="button"
                         onClick={() => setEventFormData((prev) => ({ ...prev, image: '' }))}
-                        className="rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition"
+                        className="rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition cursor-pointer"
                       >
                         Remove
                       </button>
@@ -1777,7 +1927,7 @@ export const AdminDashboard = () => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingImage}
-                    className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 disabled:opacity-50"
+                    className="rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 disabled:opacity-50 shrink-0 cursor-pointer"
                   >
                     {uploadingImage ? 'Uploading...' : '📁 Upload from Device'}
                   </button>
@@ -1785,8 +1935,8 @@ export const AdminDashboard = () => {
                     type="text"
                     value={eventFormData.image}
                     onChange={(e) => setEventFormData({ ...eventFormData, image: e.target.value })}
-                    placeholder="Or paste direct image URL (https://...)"
-                    className="flex-1 rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                    placeholder="https://images.unsplash.com/..."
+                    className="flex-1 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
                   />
                 </div>
               </div>
@@ -1802,18 +1952,18 @@ export const AdminDashboard = () => {
                 ></textarea>
               </div>
 
-              <div className="sm:col-span-2 flex gap-3 pt-2">
+              <div className="sm:col-span-2 grid grid-cols-2 gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsEventModalOpen(false)}
-                  className="w-full rounded-2xl border border-stone-300 bg-white py-3 font-bold text-slate-700 hover:bg-stone-50 transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300"
+                  className="w-full rounded-2xl border border-stone-300 bg-white py-3 font-bold text-slate-700 hover:bg-stone-50 transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   disabled={savingEvent}
                   type="submit"
-                  className="w-full rounded-2xl bg-coral py-3 font-bold text-white shadow-md hover:bg-[#df503c] transition disabled:opacity-50"
+                  className="w-full rounded-2xl bg-coral py-3 font-bold text-white shadow-md hover:bg-[#df503c] transition disabled:opacity-50 cursor-pointer"
                 >
                   {savingEvent ? 'Saving...' : editingEvent ? 'Update Event' : 'Publish Event'}
                 </button>

@@ -58,9 +58,21 @@ export const AllEventsPage = () => {
           if (action === 'create' && ev) {
             setEvents((prev) => [ev, ...prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug)]);
           } else if (action === 'update' && ev) {
-            setEvents((prev) => prev.map((item) => (item.id === ev.id || item.slug === ev.slug ? ev : item)));
+            setEvents((prev) => {
+              const next = prev.map((item) => (item.id === ev.id || item.slug === ev.slug ? { ...item, ...ev } : item));
+              try {
+                sessionStorage.setItem('MAXSHOW_EVENTS_CACHE', JSON.stringify(next));
+              } catch (_) {}
+              return next;
+            });
           } else if (action === 'delete' && ev) {
-            setEvents((prev) => prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug));
+            setEvents((prev) => {
+              const next = prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug);
+              try {
+                sessionStorage.setItem('MAXSHOW_EVENTS_CACHE', JSON.stringify(next));
+              } catch (_) {}
+              return next;
+            });
           }
         } catch (_) {}
       });

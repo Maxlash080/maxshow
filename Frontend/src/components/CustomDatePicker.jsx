@@ -121,7 +121,7 @@ export const CustomDatePicker = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold outline-none transition hover:border-coral focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white shadow-sm"
+        className="flex w-full items-center justify-between rounded-xl border border-stone-300 dark:border-slate-600/80 bg-white dark:bg-[#0d141e] px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold outline-none transition hover:border-slate-400 dark:hover:border-slate-400 focus:border-coral dark:text-white shadow-inner"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
@@ -152,7 +152,7 @@ export const CustomDatePicker = ({
         <div
           onWheel={(e) => e.stopPropagation()}
           data-dropdown-popover
-          className="absolute left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in zoom-in-95 duration-150 select-none overscroll-contain"
+          className="absolute left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#182330] z-[100] animate-in fade-in zoom-in-95 duration-150 select-none overscroll-contain"
         >
           {/* Month & Year Navigation Header */}
           <div className="flex items-center justify-between mb-3">
@@ -248,27 +248,32 @@ export const CustomDatePicker = ({
 
           {/* Quick Presets */}
           <div className="mt-3.5 pt-3 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between gap-1.5 text-[11px] font-bold">
-            <button
-              type="button"
-              onClick={() => handleQuickSelect(0)}
-              className="flex-1 py-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-coral hover:text-white transition text-center"
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickSelect(1)}
-              className="flex-1 py-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-coral hover:text-white transition text-center"
-            >
-              Tomorrow
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickSelect(7)}
-              className="flex-1 py-1.5 rounded-lg bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-coral hover:text-white transition text-center"
-            >
-              +7 Days
-            </button>
+            {[
+              { label: 'Today', offset: 0 },
+              { label: 'Tomorrow', offset: 1 },
+              { label: '+7 Days', offset: 7 },
+            ].map((p) => {
+              const target = new Date();
+              target.setHours(0, 0, 0, 0);
+              target.setDate(target.getDate() + p.offset);
+              const targetStr = formatDateToString(target.getFullYear(), target.getMonth(), target.getDate());
+              const isPresetSelected = value === targetStr;
+
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => handleQuickSelect(p.offset)}
+                  className={`flex-1 py-1.5 rounded-xl transition text-center text-[11px] font-bold cursor-pointer ${
+                    isPresetSelected
+                      ? 'bg-coral text-white font-black shadow-md shadow-coral/30 border border-coral scale-[1.02]'
+                      : 'bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-coral hover:text-white hover:border-coral hover:shadow-md hover:shadow-coral/30 border border-stone-200/60 dark:border-slate-700 active:scale-95'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Done Button */}

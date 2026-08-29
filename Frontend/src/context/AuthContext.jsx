@@ -170,7 +170,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [showToast, recordActivity]);
 
-  const logout = useCallback(async (reason = '') => {
+  const logout = useCallback(async () => {
     try {
       await apiRequest('/api/auth/logout', { method: 'POST' });
     } catch (_) {}
@@ -179,21 +179,18 @@ export const AuthProvider = ({ children }) => {
     } catch (_) {}
     setUser(null);
     setIsAdmin(false);
-    if (reason === 'inactivity') {
-      showToast('You have been logged out due to 2 minutes of inactivity.');
-    } else {
-      showToast('You have been signed out.');
-    }
+    setUserRatings({});
+    showToast('You have been signed out.');
   }, [showToast]);
 
-  // Global Inactivity & Movement Detection for Logged-In User
+  // Heartbeat Presence Ping (Keeps presence status active on server while user is browsing)
   useEffect(() => {
     if (!user) return;
 
     let lastThrottledTime = 0;
     const handleUserInteraction = () => {
       const now = Date.now();
-      if (now - lastThrottledTime > 1000) {
+      if (now - lastThrottledTime > 2000) {
         lastThrottledTime = now;
         lastActivityRef.current = now;
       }
@@ -204,17 +201,9 @@ export const AuthProvider = ({ children }) => {
       window.addEventListener(evt, handleUserInteraction, { passive: true });
     });
 
-    // Inactivity Checker Loop (Runs every 2.5 seconds)
-    const inactivityInterval = setInterval(() => {
-      if (Date.now() - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
-        console.log('[Inactivity] 2 minutes without user movement detected. Logging out...');
-        logout('inactivity');
-      }
-    }, 2500);
-
-    // Heartbeat Ping (Refreshes server session every 35s while user is active)
+    // Periodic Heartbeat Ping (Every 35 seconds while active)
     const heartbeatInterval = setInterval(() => {
-      if (Date.now() - lastActivityRef.current < INACTIVITY_TIMEOUT_MS - 10000) {
+      if (Date.now() - lastActivityRef.current < 5 * 60 * 1000) {
         apiRequest('/api/auth/heartbeat', { method: 'POST' }).catch(() => {});
       }
     }, HEARTBEAT_INTERVAL_MS);
@@ -223,33 +212,9 @@ export const AuthProvider = ({ children }) => {
       events.forEach((evt) => {
         window.removeEventListener(evt, handleUserInteraction);
       });
-      clearInterval(inactivityInterval);
       clearInterval(heartbeatInterval);
     };
-  }, [user, logout]);
-
-  // Handle Tab/Browser Exit - Send instant beacon to update admin dashboard to Offline immediately
-  useEffect(() => {
-    const handleTabExit = () => {
-      if (userRef.current) {
-        try {
-          if (navigator.sendBeacon) {
-            navigator.sendBeacon('/api/auth/logout');
-          } else {
-            fetch('/api/auth/logout', { method: 'POST', keepalive: true, credentials: 'include' }).catch(() => {});
-          }
-        } catch (_) {}
-      }
-    };
-
-    window.addEventListener('beforeunload', handleTabExit);
-    window.addEventListener('pagehide', handleTabExit);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleTabExit);
-      window.removeEventListener('pagehide', handleTabExit);
-    };
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider

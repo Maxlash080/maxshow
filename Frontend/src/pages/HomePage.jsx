@@ -151,13 +151,23 @@ export const HomePage = () => {
                 event: ev,
               });
             } else if (action === 'update' && ev) {
-              setEvents((prev) =>
-                prev.map((item) =>
+              setEvents((prev) => {
+                const next = prev.map((item) =>
                   item.id === ev.id || item.slug === ev.slug ? { ...item, ...ev } : item
-                )
-              );
+                );
+                try {
+                  sessionStorage.setItem('MAXSHOW_EVENTS_CACHE', JSON.stringify(next));
+                } catch (_) {}
+                return next;
+              });
             } else if (action === 'delete' && payload.id) {
-              setEvents((prev) => prev.filter((item) => item.id !== payload.id));
+              setEvents((prev) => {
+                const next = prev.filter((item) => item.id !== payload.id);
+                try {
+                  sessionStorage.setItem('MAXSHOW_EVENTS_CACHE', JSON.stringify(next));
+                } catch (_) {}
+                return next;
+              });
             } else {
               fetchEvents();
             }
@@ -647,9 +657,9 @@ export const HomePage = () => {
               <button
                 onClick={() => setVisibleCount((prev) => prev + 6)}
                 type="button"
-                className="rounded-2xl border border-stone-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-coral hover:bg-stone-50 dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300 dark:hover:bg-slate-800"
+                className="rounded-2xl border border-stone-300 bg-white px-8 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-coral hover:text-coral hover:bg-stone-50 dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300 dark:hover:border-coral dark:hover:text-coral cursor-pointer"
               >
-                Load more experiences ({filteredEvents.length - visibleCount} remaining)
+                Load more
               </button>
             </div>
           )}

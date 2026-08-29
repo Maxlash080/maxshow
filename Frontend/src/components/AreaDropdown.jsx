@@ -137,7 +137,7 @@ export const AreaDropdown = ({
           setIsAddingMode(false);
           setNewLocationInput('');
         }}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold outline-none transition hover:border-coral focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white shadow-sm"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-300 dark:border-slate-600/80 bg-white dark:bg-[#0d141e] px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold outline-none transition hover:border-slate-400 dark:hover:border-slate-400 focus:border-coral dark:text-white shadow-inner"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >

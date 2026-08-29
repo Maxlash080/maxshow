@@ -99,7 +99,7 @@ export const CustomTimePicker = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold outline-none transition hover:border-coral focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white shadow-sm"
+        className="flex w-full items-center justify-between rounded-xl border border-stone-300 dark:border-slate-600/80 bg-white dark:bg-[#0d141e] px-3.5 py-2.5 text-left text-xs sm:text-sm font-semibold outline-none transition hover:border-slate-400 dark:hover:border-slate-400 focus:border-coral dark:text-white shadow-inner"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
@@ -130,7 +130,7 @@ export const CustomTimePicker = ({
         <div
           onWheel={(e) => e.stopPropagation()}
           data-dropdown-popover
-          className="absolute right-0 left-auto top-full mt-2 w-72 sm:w-80 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in zoom-in-95 duration-150 select-none overscroll-contain"
+          className="absolute right-0 left-auto top-full mt-2 w-72 sm:w-80 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#182330] z-[100] animate-in fade-in zoom-in-95 duration-150 select-none overscroll-contain"
         >
           {/* Time Picker Header */}
           <div className="flex items-center justify-between mb-3 px-1">
@@ -213,16 +213,21 @@ export const CustomTimePicker = ({
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 mb-2">
               Popular Event Times
             </p>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 gap-2">
               {quickPresets.map((preset, idx) => (
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => handlePresetSelect(preset.h, preset.m)}
-                  className="py-1.5 px-2 rounded-xl bg-stone-50 dark:bg-slate-800/80 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-coral hover:text-white transition text-center shadow-2xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePresetSelect(preset.h, preset.m);
+                  }}
+                  className="group/slot relative flex flex-col items-center justify-center py-2 px-1.5 rounded-xl text-[11px] font-bold transition-all duration-150 cursor-pointer select-none border border-stone-200/80 bg-stone-50 text-slate-700 hover:bg-coral hover:text-white hover:border-coral hover:shadow-lg hover:shadow-coral/30 hover:scale-105 dark:border-slate-700 dark:bg-[#151f2b] dark:text-slate-200 dark:hover:bg-coral dark:hover:text-white dark:hover:border-coral active:scale-95 shadow-2xs"
                 >
-                  <div>{preset.time}</div>
-                  <div className="text-[9px] opacity-70 font-medium">{preset.tag}</div>
+                  <span className="font-mono text-xs">{preset.time}</span>
+                  <span className="text-[9px] mt-0.5 text-slate-400 group-hover/slot:text-white/90 font-medium transition-colors">
+                    {preset.tag}
+                  </span>
                 </button>
               ))}
             </div>

@@ -235,43 +235,44 @@ export const UserDashboard = () => {
 
       <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8 flex-1">
         {/* Welcome & Profile Card */}
-        <section className="rounded-3xl bg-white p-6 sm:p-8 shadow-soft dark:bg-[#1c2733] border border-stone-200/80 dark:border-slate-700/80">
+        <section className="rounded-[2rem] bg-white p-6 sm:p-7 shadow-sm dark:bg-[#182330] border border-stone-200/90 dark:border-slate-700/80">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             {/* User Info & Greeting */}
-            <div className="flex items-start sm:items-center gap-4 sm:gap-5">
-              <div className="relative grid h-16 w-16 sm:h-20 sm:w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-coral to-amber-500 text-2xl sm:text-3xl font-black text-white shadow-md shadow-coral/20 ring-4 ring-coral/10">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="relative grid h-16 w-16 sm:h-18 sm:w-18 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-coral via-[#ff6a54] to-amber-500 text-2xl sm:text-3xl font-black text-white shadow-md shadow-coral/25 ring-4 ring-coral/10">
                 {initial}
+                <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#182330]" title="Active" />
               </div>
 
               <div className="space-y-1">
                 {/* Eyebrow: Greeting */}
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-coral">
-                  <span className="text-sm">{timeGreeting.icon}</span>
+                  <span>{timeGreeting.icon}</span>
                   <span>{timeGreeting.text}</span>
                 </div>
 
                 {/* Full Name */}
-                <h1 className="text-2xl sm:text-3xl font-black text-ink dark:text-white tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-black text-ink dark:text-white tracking-tight">
                   Hello, {fullName}
                 </h1>
 
-                {/* Structured Metadata Pills */}
-                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                {/* Structured Metadata Row */}
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs font-medium">
                   {user?.username && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-stone-100 dark:bg-[#101820] px-2.5 py-1 text-slate-700 dark:text-slate-300 font-semibold">
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-stone-100 dark:bg-[#101820] px-2.5 py-1 text-slate-700 dark:text-slate-300 font-semibold border border-stone-200/60 dark:border-slate-700/60">
                       <span className="text-coral">@</span>
                       <span>{user.username}</span>
                     </span>
                   )}
                   {user?.email && (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#101820] px-2.5 py-1 text-slate-700 dark:text-slate-300">
-                      <span>✉️</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#101820] px-2.5 py-1 text-slate-600 dark:text-slate-300 border border-stone-200/60 dark:border-slate-700/60">
+                      <span className="text-slate-400">✉</span>
                       <span>{user.email}</span>
                     </span>
                   )}
                   {user?.phone && (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#101820] px-2.5 py-1 text-slate-700 dark:text-slate-300">
-                      <span>📞</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#101820] px-2.5 py-1 text-slate-600 dark:text-slate-300 border border-stone-200/60 dark:border-slate-700/60">
+                      <span className="text-coral">📞</span>
                       <span>{user.phone}</span>
                     </span>
                   )}
@@ -280,11 +281,11 @@ export const UserDashboard = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-stone-100 dark:border-slate-700/50">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-stone-100 dark:border-slate-700/60">
               <button
                 onClick={() => setIsEditProfileOpen(true)}
                 type="button"
-                className="flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-ink transition-all hover:border-coral hover:text-coral hover:shadow-sm dark:border-slate-700 dark:bg-[#101820] dark:text-white dark:hover:border-coral"
+                className="flex items-center gap-1.5 rounded-xl bg-coral/10 hover:bg-coral text-coral hover:text-white px-4 py-2.5 text-xs sm:text-sm font-bold transition shadow-xs cursor-pointer active:scale-95 border border-coral/20 hover:border-coral"
               >
                 <span>✏️</span>
                 <span>Edit Profile</span>
@@ -292,7 +293,7 @@ export const UserDashboard = () => {
               <button
                 onClick={handleLogout}
                 type="button"
-                className="flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-600 transition-all hover:border-stone-400 hover:text-ink dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 dark:hover:text-white"
+                className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-700 transition hover:border-stone-400 hover:text-ink dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white cursor-pointer active:scale-95 shadow-2xs"
               >
                 <span>🚪</span>
                 <span>Log out</span>
@@ -300,7 +301,7 @@ export const UserDashboard = () => {
               <button
                 onClick={handleDeleteAccount}
                 type="button"
-                className="flex items-center gap-1 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-red-500 transition-all hover:bg-red-500/10 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-950/30"
+                className="flex items-center gap-1 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-red-500 transition hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-950/40 cursor-pointer"
                 title="Delete Account"
               >
                 <span>🗑️</span>
@@ -403,13 +404,42 @@ export const UserDashboard = () => {
                                 handleShareTicket(b);
                               }}
                               type="button"
-                              className="grid h-9 w-9 place-items-center rounded-xl bg-stone-100 text-slate-600 hover:bg-coral hover:text-white transition dark:bg-slate-800 dark:text-slate-300 shadow-sm"
-                              title="Share Ticket"
+                              className="relative z-10 group/share flex items-center justify-center h-10 w-10 rounded-2xl border border-stone-200 bg-stone-100/90 text-slate-500 hover:bg-coral hover:text-white hover:border-coral hover:shadow-lg hover:shadow-coral/30 hover:scale-110 hover:ring-2 hover:ring-coral/40 transition-all duration-200 dark:border-slate-700 dark:bg-[#151f2b] dark:text-slate-400 dark:hover:bg-coral dark:hover:text-white dark:hover:border-coral active:scale-95 cursor-pointer"
+                              title="Share digital pass"
+                              aria-label="Share digital pass"
                             >
-                              <span className="text-sm">📤</span>
+                              <svg
+                                className="h-4 w-4 transition-transform duration-200 group-hover/share:scale-110"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <circle cx="18" cy="5" r="3" />
+                                <circle cx="6" cy="12" r="3" />
+                                <circle cx="18" cy="19" r="3" />
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                              </svg>
                             </button>
-                            <div className="grid h-9 w-9 place-items-center rounded-xl bg-stone-100 text-slate-500 group-hover:bg-coral group-hover:text-white transition dark:bg-slate-800 dark:text-slate-300">
-                              →
+                            <div
+                              className="group/arrow flex items-center justify-center h-10 w-10 rounded-2xl border border-stone-200 bg-stone-100/90 text-slate-500 hover:bg-coral hover:text-white hover:border-coral hover:shadow-lg hover:shadow-coral/30 hover:scale-110 hover:ring-2 hover:ring-coral/40 transition-all duration-200 dark:border-slate-700 dark:bg-[#151f2b] dark:text-slate-400 dark:hover:bg-coral dark:hover:text-white dark:hover:border-coral"
+                              title="View pass details"
+                            >
+                              <svg
+                                className="h-4 w-4 transition-transform duration-200 group-hover/arrow:translate-x-0.5"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                                <polyline points="12 5 19 12 12 19" />
+                              </svg>
                             </div>
                           </div>
                         </div>
@@ -612,16 +642,24 @@ export const UserDashboard = () => {
                   type="button"
                   className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-coral to-orange-500 py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md hover:from-[#df503c] hover:to-orange-600 transition active:scale-[0.98]"
                 >
-                  <span>📤</span>
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
                   <span>Share Pass</span>
                 </button>
                 <button
                   onClick={() => handleWhatsAppShare(selectedBooking)}
                   type="button"
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md transition active:scale-[0.98]"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md transition active:scale-[0.98] cursor-pointer"
                   title="Share on WhatsApp"
                 >
-                  <span>💬</span>
+                  <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24">
+                    <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 11.66c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.15.17-.25.25-.42.08-.17.04-.31-.02-.43s-.56-1.34-.76-1.84c-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.84-.86 2.05s.88 2.38 1 2.54c.12.17 1.73 2.64 4.2 3.7.59.25 1.05.4 1.41.51.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z" />
+                  </svg>
                   <span>WhatsApp</span>
                 </button>
               </div>

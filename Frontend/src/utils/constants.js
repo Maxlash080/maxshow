@@ -10,6 +10,7 @@ export const LOCATIONS = [
   'Nigdi',
   'Punawale',
   'Aundh',
+  'Baner',
 ];
 
 export const AREA_OPTIONS = [
@@ -31,6 +32,44 @@ export const AREA_OPTIONS = [
   'Hadapsar, Pune',
   'Shivajinagar, Pune',
 ];
+
+export const getCustomAreas = () => {
+  try {
+    const raw = localStorage.getItem('MAXSHOW_CUSTOM_AREAS');
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+export const saveCustomArea = (newArea) => {
+  try {
+    const current = getCustomAreas();
+    if (!current.some((a) => a.toLowerCase() === newArea.toLowerCase())) {
+      const updated = [...current, newArea];
+      localStorage.setItem('MAXSHOW_CUSTOM_AREAS', JSON.stringify(updated));
+    }
+  } catch (_) {}
+};
+
+export const getAllAreaOptions = () => {
+  const custom = getCustomAreas();
+  const combined = new Set([...AREA_OPTIONS, ...custom]);
+  return Array.from(combined);
+};
+
+export const formatLocationWithPune = (raw) => {
+  if (!raw || typeof raw !== 'string') return '';
+  let clean = raw.trim();
+  clean = clean.replace(/^[,\s-]+|[,\s-]+$/g, '');
+  clean = clean.replace(/,\s*pune$/i, '').replace(/\s+pune$/i, '').trim();
+  if (!clean || clean.toLowerCase() === 'pune') return '';
+  const capitalized = clean
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+  return `${capitalized}, Pune`;
+};
 
 export const EVENT_CATEGORIES = [
   { id: 'music', name: 'Music', icon: '🎵' },

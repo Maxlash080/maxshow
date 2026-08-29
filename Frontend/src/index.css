@@ -20,9 +20,13 @@
   }
 }
 
-/* Prevent modal scroll chaining */
-.modal-scroll-contain {
+/* Prevent modal & dropdown scroll chaining */
+.modal-scroll-contain,
+.overflow-y-auto,
+.overflow-auto,
+[data-dropdown-popover] {
   overscroll-behavior: contain !important;
+  overscroll-behavior-y: contain !important;
 }
 
 /* Custom Sleek Themed Scrollbar */

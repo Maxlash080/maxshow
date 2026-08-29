@@ -128,7 +128,11 @@ export const CustomTimePicker = ({
 
       {/* Dropdown Popover (Positioned Right-0 so it never overflows modal container) */}
       {isOpen && (
-        <div className="absolute right-0 left-auto top-full mt-2 w-72 sm:w-80 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in zoom-in-95 duration-150 select-none">
+        <div
+          onWheel={(e) => e.stopPropagation()}
+          data-dropdown-popover
+          className="absolute right-0 left-auto top-full mt-2 w-72 sm:w-80 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in zoom-in-95 duration-150 select-none overscroll-contain"
+        >
           {/* Time Picker Header */}
           <div className="flex items-center justify-between mb-3 px-1">
             <span className="font-black text-xs uppercase tracking-wider text-slate-400">

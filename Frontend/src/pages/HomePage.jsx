@@ -36,7 +36,7 @@ const QUICK_FILTERS = [
 export const HomePage = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState(Object.values(FALLBACK_EVENTS));
-  const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0] || 'Hinjawadi');
+  const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0] !== 'Pune' ? LOCATIONS[0] : 'Hinjawadi');
   const [activeQuickFilter, setActiveQuickFilter] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,21 +200,30 @@ export const HomePage = () => {
 
       if (matched) {
         const shortName = matched.replace(/,\s*Pune$/i, '').trim();
-        locMap.set(shortName.toLowerCase(), shortName);
+        // Filter out "Pune" as a standalone location
+        if (shortName.toLowerCase() !== 'pune' && shortName.trim() !== '') {
+          locMap.set(shortName.toLowerCase(), shortName);
+        }
       } else {
         const cleanRawName = raw.split(',')[0].trim();
-        if (cleanRawName) {
+        // Filter out "Pune" as a standalone location and empty strings
+        if (cleanRawName && cleanRawName.toLowerCase() !== 'pune' && cleanRawName.trim() !== '') {
           locMap.set(cleanRawName.toLowerCase(), cleanRawName);
         }
       }
     });
 
     if (locMap.size === 0) {
-      return ['Hinjawadi'];
+      // Filter out Pune from LOCATIONS before returning fallback
+      const filteredLocations = LOCATIONS.filter(loc => loc.toLowerCase() !== 'pune');
+      return filteredLocations.length > 0 ? filteredLocations : ['Hinjawadi'];
     }
 
+    // Final filter to ensure no "Pune" slips through
+    const finalLocations = Array.from(locMap.values()).filter(loc => loc.toLowerCase() !== 'pune');
+
     // Sort according to AREA_OPTIONS priority
-    const sorted = Array.from(locMap.values()).sort((a, b) => {
+    const sorted = finalLocations.sort((a, b) => {
       const idxA = AREA_OPTIONS.findIndex(opt => opt.toLowerCase().includes(a.toLowerCase()));
       const idxB = AREA_OPTIONS.findIndex(opt => opt.toLowerCase().includes(b.toLowerCase()));
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -233,7 +242,11 @@ export const HomePage = () => {
         (loc) => loc.toLowerCase() === currentLocation.toLowerCase()
       );
       if (!exists) {
-        setCurrentLocation(activeLocations[0]);
+        // Make sure we don't set Pune as current location
+        const firstValidLocation = activeLocations[0].toLowerCase() === 'pune' 
+          ? (activeLocations[1] || 'Hinjawadi') 
+          : activeLocations[0];
+        setCurrentLocation(firstValidLocation);
       }
     }
   }, [activeLocations, currentLocation]);
@@ -303,14 +316,18 @@ export const HomePage = () => {
       const g = advancedFilters.genre.toLowerCase();
       result = result.filter((e) => {
         const combined = `${e.type || ''} ${e.event_type || ''} ${e.category || ''} ${e.title || ''} ${e.description || ''}`.toLowerCase();
-        if (g.includes('comedy')) return combined.includes('comedy') || combined.includes('standup') || combined.includes('laugh');
-        if (g.includes('acoustic')) return combined.includes('acoustic') || combined.includes('unplugged') || combined.includes('music');
+        
+        // More precise genre matching
+        if (g.includes('comedy')) return combined.includes('comedy') || combined.includes('stand-up') || combined.includes('standup') || combined.includes('laugh');
+        if (g.includes('acoustic')) return combined.includes('acoustic') || combined.includes('unplugged');
         if (g.includes('electronic') || g.includes('dj')) return combined.includes('electronic') || combined.includes('dj') || combined.includes('nightlife');
         if (g.includes('rock') || g.includes('indie')) return combined.includes('rock') || combined.includes('indie') || combined.includes('band');
-        if (g.includes('workshop') || g.includes('craft')) return combined.includes('workshop') || combined.includes('create') || combined.includes('craft') || combined.includes('art');
-        if (g.includes('cinema') || g.includes('screenings')) return combined.includes('cinema') || combined.includes('film') || combined.includes('movie') || combined.includes('screen');
-        if (g.includes('culinary') || g.includes('dining')) return combined.includes('food') || combined.includes('brunch') || combined.includes('dining') || combined.includes('drink');
-        if (g.includes('fitness') || g.includes('yoga')) return combined.includes('move') || combined.includes('run') || combined.includes('yoga') || combined.includes('fitness');
+        if (g.includes('workshop') || g.includes('craft')) return combined.includes('workshop') || combined.includes('craft') || combined.includes('art') || combined.includes('create');
+        if (g.includes('cinema') || g.includes('screenings')) return combined.includes('cinema') || combined.includes('film') || combined.includes('movie') || combined.includes('screen') || combined.includes('screening');
+        if (g.includes('culinary') || g.includes('dining')) return combined.includes('food') || combined.includes('culinary') || combined.includes('dining') || combined.includes('drink') || combined.includes('brunch');
+        if (g.includes('fitness') || g.includes('yoga')) return combined.includes('fitness') || combined.includes('yoga') || combined.includes('workout') || combined.includes('exercise');
+        
+        // Fallback to direct string match
         return combined.includes(g);
       });
     }

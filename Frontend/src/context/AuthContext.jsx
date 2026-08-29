@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { apiRequest } from '../utils/api';
 import { useToast } from './ToastContext';
+
+const INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes (120,000 ms)
+const HEARTBEAT_INTERVAL_MS = 35 * 1000; // 35 seconds
 
 const AuthContext = createContext({
   user: null,
@@ -12,6 +15,7 @@ const AuthContext = createContext({
   toggleBookmark: async () => {},
   refreshAuth: async () => {},
   logout: async () => {},
+  recordActivity: () => {},
 });
 
 const getStoredBookmarks = () => {
@@ -36,6 +40,14 @@ export const AuthProvider = ({ children }) => {
   const [userRatings, setUserRatings] = useState({});
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
+
+  const lastActivityRef = useRef(Date.now());
+  const userRef = useRef(null);
+  userRef.current = user;
+
+  const recordActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
 
   const setUserRating = useCallback((eventId, eventSlug, rating) => {
     setUserRatings((prev) => {
@@ -65,6 +77,7 @@ export const AuthProvider = ({ children }) => {
       if (authData && authData.user) {
         setUser(authData.user);
         setIsAdmin(Boolean(authData.user.is_admin || authData.user.username === 'admin'));
+        lastActivityRef.current = Date.now();
       } else {
         setUser(null);
         setIsAdmin(currentAdmin);
@@ -103,6 +116,7 @@ export const AuthProvider = ({ children }) => {
   }, [refreshAuth]);
 
   const toggleBookmark = useCallback(async (eventId, eventSlug) => {
+    recordActivity();
     if (!eventId && !eventSlug) return;
     const targetId = eventId && !isNaN(Number(eventId)) ? Number(eventId) : null;
     const targetSlug = eventSlug ? String(eventSlug).trim() : null;
@@ -154,9 +168,9 @@ export const AuthProvider = ({ children }) => {
         showToast(isCurrentlyIn ? 'Removed from bookmarks.' : 'Bookmarked! Sign in to sync with your account 🔖');
       }
     }
-  }, [showToast]);
+  }, [showToast, recordActivity]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (reason = '') => {
     try {
       await apiRequest('/api/auth/logout', { method: 'POST' });
     } catch (_) {}
@@ -165,8 +179,77 @@ export const AuthProvider = ({ children }) => {
     } catch (_) {}
     setUser(null);
     setIsAdmin(false);
-    showToast('You have been signed out.');
+    if (reason === 'inactivity') {
+      showToast('You have been logged out due to 2 minutes of inactivity.');
+    } else {
+      showToast('You have been signed out.');
+    }
   }, [showToast]);
+
+  // Global Inactivity & Movement Detection for Logged-In User
+  useEffect(() => {
+    if (!user) return;
+
+    let lastThrottledTime = 0;
+    const handleUserInteraction = () => {
+      const now = Date.now();
+      if (now - lastThrottledTime > 1000) {
+        lastThrottledTime = now;
+        lastActivityRef.current = now;
+      }
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click', 'wheel'];
+    events.forEach((evt) => {
+      window.addEventListener(evt, handleUserInteraction, { passive: true });
+    });
+
+    // Inactivity Checker Loop (Runs every 2.5 seconds)
+    const inactivityInterval = setInterval(() => {
+      if (Date.now() - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+        console.log('[Inactivity] 2 minutes without user movement detected. Logging out...');
+        logout('inactivity');
+      }
+    }, 2500);
+
+    // Heartbeat Ping (Refreshes server session every 35s while user is active)
+    const heartbeatInterval = setInterval(() => {
+      if (Date.now() - lastActivityRef.current < INACTIVITY_TIMEOUT_MS - 10000) {
+        apiRequest('/api/auth/heartbeat', { method: 'POST' }).catch(() => {});
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      events.forEach((evt) => {
+        window.removeEventListener(evt, handleUserInteraction);
+      });
+      clearInterval(inactivityInterval);
+      clearInterval(heartbeatInterval);
+    };
+  }, [user, logout]);
+
+  // Handle Tab/Browser Exit - Send instant beacon to update admin dashboard to Offline immediately
+  useEffect(() => {
+    const handleTabExit = () => {
+      if (userRef.current) {
+        try {
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/auth/logout');
+          } else {
+            fetch('/api/auth/logout', { method: 'POST', keepalive: true, credentials: 'include' }).catch(() => {});
+          }
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('beforeunload', handleTabExit);
+    window.addEventListener('pagehide', handleTabExit);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleTabExit);
+      window.removeEventListener('pagehide', handleTabExit);
+    };
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -180,6 +263,7 @@ export const AuthProvider = ({ children }) => {
         toggleBookmark,
         refreshAuth,
         logout,
+        recordActivity,
         loading,
       }}
     >

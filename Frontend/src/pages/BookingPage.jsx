@@ -64,7 +64,7 @@ export const BookingPage = () => {
       event_id: Number(event.id) || null,
       event_slug: slug,
       title: event.title || 'Event Booking',
-      location: event.location || event.venue || 'Pune',
+      location: event.location || event.venue || 'Hinjawadi, Pune',
       time: event.time || 'TBA',
       price: unitPrice,
       quantity,

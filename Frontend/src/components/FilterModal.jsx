@@ -6,7 +6,6 @@ const SORT_OPTIONS = [
   { id: 'price_low_high', label: 'Price: Low to High' },
   { id: 'price_high_low', label: 'Price: High to Low' },
   { id: 'date', label: 'Date' },
-  { id: 'distance', label: 'Distance' },
 ];
 
 const GENRE_OPTIONS = [
@@ -90,7 +89,10 @@ export const FilterModal = ({ isOpen, onClose, filters, onApply }) => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-2">
+          <div
+            onWheel={(e) => e.stopPropagation()}
+            className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-2"
+          >
             {activeTab === 'sort' && (
               <div>
                 <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Select sorting order</p>

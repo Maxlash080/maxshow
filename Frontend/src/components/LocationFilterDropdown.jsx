@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { EVENT_CATEGORIES } from '../utils/constants';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { LOCATIONS, getCustomAreas } from '../utils/constants';
 
-export const CategoryDropdown = ({
+export const LocationFilterDropdown = ({
   value,
   onChange,
+  locations = [],
   className = '',
-  includeAll = false,
-  allLabel = 'All Categories',
+  includeAll = true,
+  allLabel = 'All Locations',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -21,9 +22,28 @@ export const CategoryDropdown = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectedCat = EVENT_CATEGORIES.find(
-    (c) => c.id.toLowerCase() === (value || '').toLowerCase()
-  );
+  const displayList = useMemo(() => {
+    const locSet = new Set();
+    locations.forEach((l) => {
+      const clean = (l || '').replace(/,\s*pune$/i, '').trim();
+      if (clean && clean.toLowerCase() !== 'pune') {
+        locSet.add(clean);
+      }
+    });
+    const custom = getCustomAreas();
+    custom.forEach((c) => {
+      const clean = (c || '').replace(/,\s*pune$/i, '').trim();
+      if (clean && clean.toLowerCase() !== 'pune') {
+        locSet.add(clean);
+      }
+    });
+    LOCATIONS.forEach((l) => {
+      if (l.toLowerCase() !== 'pune') {
+        locSet.add(l);
+      }
+    });
+    return Array.from(locSet);
+  }, [locations, isOpen]);
 
   return (
     <div className={`relative ${isOpen ? 'z-30' : 'z-10'} ${className}`} ref={dropdownRef}>
@@ -35,14 +55,11 @@ export const CategoryDropdown = ({
         aria-expanded={isOpen}
       >
         <span className="flex items-center gap-2 truncate">
-          {value === 'all' && <span className="text-base">🌐</span>}
-          {selectedCat && value !== 'all' && <span className="text-base">{selectedCat.icon}</span>}
+          <span className="text-base">📍</span>
           <span className="truncate">
-            {value === 'all'
+            {value === 'all' || !value
               ? allLabel
-              : selectedCat
-              ? selectedCat.name
-              : value || 'Select Category'}
+              : value}
           </span>
         </span>
         <svg
@@ -72,16 +89,16 @@ export const CategoryDropdown = ({
                 setIsOpen(false);
               }}
               className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs sm:text-sm font-semibold transition ${
-                value === 'all'
+                value === 'all' || !value
                   ? 'bg-coral text-white font-bold shadow-sm'
                   : 'text-slate-700 hover:bg-coral/10 hover:text-coral dark:text-slate-200 dark:hover:bg-[#283747]'
               }`}
             >
               <span className="flex items-center gap-2.5 truncate">
-                <span className="text-base">🌐</span>
+                <span className="text-base">📍</span>
                 <span>{allLabel}</span>
               </span>
-              {value === 'all' && (
+              {(value === 'all' || !value) && (
                 <svg className="h-4 w-4 shrink-0 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                 </svg>
@@ -89,14 +106,14 @@ export const CategoryDropdown = ({
             </button>
           )}
 
-          {EVENT_CATEGORIES.map((cat) => {
-            const isSelected = (value || '').toLowerCase() === cat.id.toLowerCase();
+          {displayList.map((loc) => {
+            const isSelected = (value || '').toLowerCase() === loc.toLowerCase();
             return (
               <button
-                key={cat.id}
+                key={loc}
                 type="button"
                 onClick={() => {
-                  onChange(cat.id);
+                  onChange(loc);
                   setIsOpen(false);
                 }}
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs sm:text-sm font-semibold transition ${
@@ -106,8 +123,8 @@ export const CategoryDropdown = ({
                 }`}
               >
                 <span className="flex items-center gap-2.5 truncate">
-                  <span className="text-base">{cat.icon}</span>
-                  <span className="truncate">{cat.name}</span>
+                  <span className="text-base">🏙️</span>
+                  <span className="truncate">{loc}</span>
                 </span>
                 {isSelected && (
                   <svg className="h-4 w-4 shrink-0 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">

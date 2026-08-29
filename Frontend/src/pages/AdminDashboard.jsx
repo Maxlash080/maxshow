@@ -7,9 +7,11 @@ import { useConfirmModal } from '../context/ModalContext';
 import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 import { CategoryDropdown } from '../components/CategoryDropdown';
+import { LocationFilterDropdown } from '../components/LocationFilterDropdown';
 import { AreaDropdown } from '../components/AreaDropdown';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { CustomTimePicker } from '../components/CustomTimePicker';
+import { LOCATIONS } from '../utils/constants';
 
 export const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -74,6 +76,7 @@ export const AdminDashboard = () => {
   const [userStatusFilter, setUserStatusFilter] = useState('all'); // 'all' | 'online' | 'offline'
   const [eventSearch, setEventSearch] = useState('');
   const [eventCategoryFilter, setEventCategoryFilter] = useState('all');
+  const [eventLocationFilter, setEventLocationFilter] = useState('all');
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingTypeFilter, setBookingTypeFilter] = useState('all'); // 'all' | 'paid' | 'free'
 
@@ -494,7 +497,7 @@ export const AdminDashboard = () => {
       type: ev.type || ev.event_type || 'Live music',
       category: ev.category || 'music',
       venue: ev.venue || '',
-      location: ev.location || 'Pune',
+      location: ev.location || 'Hinjawadi, Pune',
       date: ev.date || (ev.time?.split(' ')[0] || new Date().toISOString().split('T')[0]),
       clock: ev.clock || (ev.time?.split(' ')[1] || '20:00'),
       price: ev.price !== undefined ? ev.price : 499,
@@ -618,10 +621,37 @@ export const AdminDashboard = () => {
     return result;
   }, [users, userSearch, userStatusFilter]);
 
+  const availableEventLocations = useMemo(() => {
+    const locSet = new Set();
+    events.forEach((ev) => {
+      const loc = (ev.location || '').trim();
+      if (loc) {
+        const clean = loc.replace(/,\s*pune$/i, '').trim();
+        if (clean && clean.toLowerCase() !== 'pune') {
+          locSet.add(clean);
+        }
+      }
+    });
+    LOCATIONS.forEach((l) => {
+      if (l.toLowerCase() !== 'pune') {
+        locSet.add(l);
+      }
+    });
+    return Array.from(locSet);
+  }, [events]);
+
   const filteredEvents = useMemo(() => {
     let result = [...events];
     if (eventCategoryFilter !== 'all') {
       result = result.filter((e) => (e.category || '').toLowerCase() === eventCategoryFilter.toLowerCase());
+    }
+    if (eventLocationFilter !== 'all') {
+      const targetLoc = eventLocationFilter.toLowerCase().trim();
+      result = result.filter((e) => {
+        const loc = (e.location || '').toLowerCase();
+        const ven = (e.venue || '').toLowerCase();
+        return loc.includes(targetLoc) || ven.includes(targetLoc);
+      });
     }
     if (eventSearch.trim()) {
       const q = eventSearch.toLowerCase().trim();
@@ -633,7 +663,7 @@ export const AdminDashboard = () => {
       );
     }
     return result;
-  }, [events, eventSearch, eventCategoryFilter]);
+  }, [events, eventSearch, eventCategoryFilter, eventLocationFilter]);
 
   const filteredBookings = useMemo(() => {
     let result = [...bookings];
@@ -904,19 +934,40 @@ export const AdminDashboard = () => {
           <section className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={eventSearch}
-                  onChange={(e) => setEventSearch(e.target.value)}
-                  placeholder="Search events by title, venue..."
-                  className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
-                />
-                <div className="w-44 sm:w-52">
+                <div className="relative flex items-center w-full sm:w-72">
+                  <span className="absolute left-3 text-slate-400 dark:text-slate-500 text-sm pointer-events-none">🔍</span>
+                  <input
+                    type="text"
+                    value={eventSearch}
+                    onChange={(e) => setEventSearch(e.target.value)}
+                    placeholder="Search events by title, venue..."
+                    className="w-full rounded-xl border border-stone-300 bg-white pl-9 pr-8 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white shadow-sm"
+                  />
+                  {eventSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setEventSearch('')}
+                      className="absolute right-2.5 text-xs text-slate-400 hover:text-ink dark:hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <div className="w-40 sm:w-48">
                   <CategoryDropdown
                     value={eventCategoryFilter}
                     onChange={(val) => setEventCategoryFilter(val)}
                     includeAll={true}
                     allLabel="All Categories"
+                  />
+                </div>
+                <div className="w-40 sm:w-48">
+                  <LocationFilterDropdown
+                    value={eventLocationFilter}
+                    onChange={(val) => setEventLocationFilter(val)}
+                    locations={availableEventLocations}
+                    includeAll={true}
+                    allLabel="All Locations"
                   />
                 </div>
               </div>
@@ -989,13 +1040,25 @@ export const AdminDashboard = () => {
           <section className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search users by name, username, email..."
-                  className="w-full sm:w-72 rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
-                />
+                <div className="relative flex items-center w-full sm:w-72">
+                  <span className="absolute left-3 text-slate-400 dark:text-slate-500 text-sm pointer-events-none">🔍</span>
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search users by name, username, email..."
+                    className="w-full rounded-xl border border-stone-300 bg-white pl-9 pr-8 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white shadow-sm"
+                  />
+                  {userSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setUserSearch('')}
+                      className="absolute right-2.5 text-xs text-slate-400 hover:text-ink dark:hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5">
                   {[
                     { id: 'all', label: `All (${users.length})` },
@@ -1133,13 +1196,25 @@ export const AdminDashboard = () => {
           <section className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={bookingSearch}
-                  onChange={(e) => setBookingSearch(e.target.value)}
-                  placeholder="Search by code, user, event..."
-                  className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
-                />
+                <div className="relative flex items-center w-full sm:w-72">
+                  <span className="absolute left-3 text-slate-400 dark:text-slate-500 text-sm pointer-events-none">🔍</span>
+                  <input
+                    type="text"
+                    value={bookingSearch}
+                    onChange={(e) => setBookingSearch(e.target.value)}
+                    placeholder="Search by code, user, event..."
+                    className="w-full rounded-xl border border-stone-300 bg-white pl-9 pr-8 py-2 text-xs sm:text-sm font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-white shadow-sm"
+                  />
+                  {bookingSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setBookingSearch('')}
+                      className="absolute right-2.5 text-xs text-slate-400 hover:text-ink dark:hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5">
                   {['all', 'paid', 'free'].map((t) => (
                     <button
@@ -1226,7 +1301,7 @@ export const AdminDashboard = () => {
             if (e.target === e.currentTarget) setSelectedUser(null);
           }}
         >
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-6 sm:p-8 space-y-6 no-scrollbar">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto overscroll-contain modal-scroll-contain rounded-[2.5rem] bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-6 sm:p-8 space-y-6 no-scrollbar">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-stone-100 pb-4 dark:border-slate-700">
               <div className="flex items-center gap-3.5">
@@ -1346,7 +1421,7 @@ export const AdminDashboard = () => {
                   <p className="text-[11px] text-slate-400">When the user books passes, their orders will appear here.</p>
                 </div>
               ) : (
-                <div className="max-h-56 overflow-y-auto space-y-2.5 no-scrollbar pr-1">
+                <div className="max-h-56 overflow-y-auto overscroll-contain space-y-2.5 no-scrollbar pr-1">
                   {userBookings.map((b) => {
                     const isFreeBooking = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
                     return (
@@ -1420,7 +1495,7 @@ export const AdminDashboard = () => {
             if (e.target === e.currentTarget) setIsEventModalOpen(false);
           }}
         >
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-6 sm:p-8 space-y-5">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto overscroll-contain modal-scroll-contain rounded-[2.5rem] bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-6 sm:p-8 space-y-5">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-slate-700">
               <h3 className="text-xl font-black text-ink dark:text-white">
                 {editingEvent ? 'Edit Event Listing' : 'Create New Event Listing'}

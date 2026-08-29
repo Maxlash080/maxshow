@@ -74,6 +74,23 @@ def send_otp_email(to_email: str, otp_code: str, purpose: str = "register") -> b
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>{heading}</title>
+      <style>
+        @media only screen and (max-width: 480px) {{
+          .otp-code {{
+            font-size: 28px !important;
+            letter-spacing: 3px !important;
+          }}
+          .otp-container {{
+            padding: 18px 12px !important;
+          }}
+        }}
+        @media only screen and (max-width: 380px) {{
+          .otp-code {{
+            font-size: 24px !important;
+            letter-spacing: 2px !important;
+          }}
+        }}
+      </style>
     </head>
     <body style="margin: 0; padding: 32px 16px; background-color: #0f1318; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #ffffff;">
       <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 480px; margin: 0 auto; background-color: #171c24; border-radius: 28px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); overflow: hidden;">
@@ -102,8 +119,8 @@ def send_otp_email(to_email: str, otp_code: str, purpose: str = "register") -> b
             </p>
 
             <!-- OTP Box -->
-            <div style="background-color: #261616; border: 1.5px dashed #F2634E; border-radius: 20px; padding: 22px 16px; text-align: center; margin: 0 0 22px 0;">
-              <span style="font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; font-size: 36px; font-weight: 900; letter-spacing: 6px; color: #F2634E; display: inline-block;">
+            <div class="otp-container" style="background-color: #261616; border: 1.5px dashed #F2634E; border-radius: 20px; padding: 22px 16px; text-align: center; margin: 0 0 22px 0;">
+              <span class="otp-code" style="font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; font-size: 36px; font-weight: 900; letter-spacing: 6px; color: #F2634E; display: inline-block; white-space: nowrap;">
                 {spaced_otp}
               </span>
             </div>
@@ -902,7 +919,13 @@ async def lifespan(_: FastAPI):
         seed_admin(db)
         seed_test_account(db)
         seed_events(db)
+    cleanup_task = asyncio.create_task(session_cleanup_loop())
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="MAXSHOW API", lifespan=lifespan)
@@ -927,7 +950,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+INACTIVITY_TIMEOUT_SECONDS = 120  # 2 minutes of idle time before automatic session logout
 active_sessions: dict[str, int] = {}
+session_last_active: dict[str, float] = {}
 admin_sessions: set[str] = set()
 
 
@@ -975,6 +1000,93 @@ class AdminNotificationBroker:
 admin_broker = AdminNotificationBroker()
 
 
+def cleanup_inactive_sessions():
+    """Scans active_sessions and removes any that exceeded INACTIVITY_TIMEOUT_SECONDS, broadcasting offline status."""
+    now = time.time()
+    expired_tokens = []
+    for token, uid in list(active_sessions.items()):
+        last_time = session_last_active.get(token)
+        if last_time is None:
+            session_last_active[token] = now
+        elif now - last_time > INACTIVITY_TIMEOUT_SECONDS:
+            expired_tokens.append(token)
+
+    if not expired_tokens:
+        return
+
+    affected_users = set()
+    for token in expired_tokens:
+        uid = active_sessions.pop(token, None)
+        session_last_active.pop(token, None)
+        if uid:
+            affected_users.add(uid)
+
+    for uid in affected_users:
+        if uid not in active_sessions.values():
+            try:
+                with SessionLocal() as db:
+                    u = db.get(User, uid)
+                    if u:
+                        admin_broker.broadcast_sync("user_status_changed", {
+                            "user_id": uid,
+                            "custom_id": u.custom_id or f"USR-{uid}",
+                            "name": u.full_name,
+                            "username": u.username or "user",
+                            "email": u.email,
+                            "is_online": False,
+                            "status": "Offline",
+                            "action": "inactivity_timeout",
+                            "timestamp": datetime.now().isoformat(),
+                        })
+            except Exception as e:
+                print(f"[Cleanup Inactive Sessions Error]: {e}")
+
+
+def touch_session(session_token: str | None) -> int | None:
+    """Refreshes last_active for a session if valid; expires session and broadcasts offline if timed out."""
+    if not session_token or session_token not in active_sessions:
+        return None
+    now = time.time()
+    last_time = session_last_active.get(session_token, now)
+    if now - last_time > INACTIVITY_TIMEOUT_SECONDS:
+        uid = active_sessions.pop(session_token, None)
+        session_last_active.pop(session_token, None)
+        if uid and uid not in active_sessions.values():
+            try:
+                with SessionLocal() as db:
+                    u = db.get(User, uid)
+                    if u:
+                        admin_broker.broadcast_sync("user_status_changed", {
+                            "user_id": uid,
+                            "custom_id": u.custom_id or f"USR-{uid}",
+                            "name": u.full_name,
+                            "username": u.username or "user",
+                            "email": u.email,
+                            "is_online": False,
+                            "status": "Offline",
+                            "action": "inactivity_timeout",
+                            "timestamp": datetime.now().isoformat(),
+                        })
+            except Exception as e:
+                print(f"[Touch Session Expire Error]: {e}")
+        return None
+    session_last_active[session_token] = now
+    return active_sessions.get(session_token)
+
+
+async def session_cleanup_loop():
+    """Background loop that periodically checks for inactive sessions and marks users offline."""
+    while True:
+        try:
+            await asyncio.sleep(5)
+            cleanup_inactive_sessions()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[Session Cleanup Loop Error]: {e}")
+            await asyncio.sleep(5)
+
+
 def user_data(user: User) -> dict:
     if not user.custom_id:
         user.custom_id = generate_user_custom_id(user.full_name, user.phone_number)
@@ -990,7 +1102,7 @@ def user_data(user: User) -> dict:
 
 def require_user(request: Request, db: Session) -> User:
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.get(session_token) if session_token else None
+    user_id = touch_session(session_token)
     user = db.get(User, user_id) if user_id else None
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Please sign in to continue.")
@@ -1006,7 +1118,7 @@ def get_or_create_user_for_booking(
 ) -> User:
     # 1. Try logged-in user first
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.get(session_token) if session_token else None
+    user_id = touch_session(session_token)
     if user_id:
         user = db.get(User, user_id)
         if user:
@@ -1380,6 +1492,7 @@ def forgot_password_reset(payload: ResetPasswordRequest, db: Session = Depends(g
     for token, uid in list(active_sessions.items()):
         if uid == user.id:
             active_sessions.pop(token, None)
+            session_last_active.pop(token, None)
 
     return {
         "message": "Password changed successfully! Please sign in with your new password.",
@@ -1498,6 +1611,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
     session_token = secrets.token_urlsafe(32)
     active_sessions[session_token] = matched_user.id
+    session_last_active[session_token] = time.time()
     response.set_cookie("maxshow_session", session_token, httponly=True, samesite="lax", max_age=86400 * 30, secure=False)
 
     # Real-time Broadcast: User is now ONLINE
@@ -1521,10 +1635,29 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> dict:
     return {"user": user_data(require_user(request, db))}
 
 
+@app.post("/api/auth/heartbeat")
+@app.get("/api/auth/heartbeat")
+def user_heartbeat(request: Request, db: Session = Depends(get_db)) -> dict:
+    """Refreshes the user's active session timestamp to prevent inactivity timeout while actively browsing."""
+    session_token = request.cookies.get("maxshow_session")
+    user_id = touch_session(session_token)
+    if user_id:
+        user = db.get(User, user_id)
+        return {
+            "status": "active",
+            "user_id": user_id,
+            "username": user.username if user else None,
+            "last_active": session_last_active.get(session_token, time.time()),
+        }
+    return {"status": "inactive"}
+
+
 @app.post("/api/auth/logout")
 def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     session_token = request.cookies.get("maxshow_session")
     user_id = active_sessions.pop(session_token, None) if session_token else None
+    if session_token:
+        session_last_active.pop(session_token, None)
     if user_id:
         user = db.get(User, user_id)
         has_other_sessions = user_id in active_sessions.values()
@@ -1613,6 +1746,7 @@ def delete_user_account(request: Request, response: Response, db: Session = Depe
     session_token = request.cookies.get("maxshow_session")
     if session_token:
         active_sessions.pop(session_token, None)
+        session_last_active.pop(session_token, None)
     response.delete_cookie("maxshow_session")
 
     return {"message": "You deleted your account."}
@@ -1755,6 +1889,7 @@ def test_live_notification(request: Request) -> dict:
     # Keep online in memory
     dummy_token = secrets.token_urlsafe(32)
     active_sessions[dummy_token] = simulated_id
+    session_last_active[dummy_token] = time.time()
 
     admin_broker.broadcast_sync("user_registered", test_user)
     return {"message": "Test live registration broadcast emitted successfully!", "user": test_user}
@@ -1788,7 +1923,7 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
 @app.get("/api/events")
 def list_events(request: Request, db: Session = Depends(get_db)) -> dict:
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.get(session_token) if session_token else None
+    user_id = touch_session(session_token)
     user_ratings = {}
     if user_id:
         user_ratings = {r.event_id: r.rating for r in db.query(Rating).filter(Rating.user_id == user_id).all()}
@@ -1810,7 +1945,7 @@ def get_event(slug: str, request: Request, db: Session = Depends(get_db)) -> dic
     data["user_rating"] = None
     data["user_review"] = None
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.get(session_token) if session_token else None
+    user_id = touch_session(session_token)
     if user_id:
         rating_obj = db.query(Rating).filter(Rating.user_id == user_id, Rating.event_id == event.id).first()
         if rating_obj:
@@ -1825,6 +1960,7 @@ def get_event(slug: str, request: Request, db: Session = Depends(get_db)) -> dic
 @app.get("/api/admin/metrics/")
 def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
     require_admin(request)
+    cleanup_inactive_sessions()
     users = db.query(User).order_by(User.created_at.desc(), User.id.desc()).all()
     events = db.query(Event).order_by(Event.created_at.desc(), Event.id.desc()).all()
     bookings = db.query(Booking).order_by(Booking.created_at.desc(), Booking.id.desc()).all()
@@ -1961,11 +2097,13 @@ def toggle_user_status(user_id: int, request: Request, db: Session = Depends(get
         for token, uid in list(active_sessions.items()):
             if uid == user_id:
                 active_sessions.pop(token, None)
+                session_last_active.pop(token, None)
         new_active = False
         new_status = "Deactivated"
     else:
         dummy_token = secrets.token_urlsafe(32)
         active_sessions[dummy_token] = user_id
+        session_last_active[dummy_token] = time.time()
         new_active = True
         new_status = "Active"
 
@@ -2156,6 +2294,7 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)) -
     for token, session_user_id in list(active_sessions.items()):
         if session_user_id == user_id:
             active_sessions.pop(token, None)
+            session_last_active.pop(token, None)
     return {"message": "User deleted."}
 
 
@@ -2644,7 +2783,7 @@ def delete_event_rating(identifier: str, request: Request, db: Session = Depends
 @app.get("/api/events/{slug}/my-rating/")
 def get_my_rating(slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.get(session_token) if session_token else None
+    user_id = touch_session(session_token)
     if not user_id:
         return {"rated": False, "rating": None}
 
@@ -2667,7 +2806,7 @@ def get_my_rating(slug: str, request: Request, db: Session = Depends(get_db)) ->
 @app.get("/api/user/state/")
 def get_user_state(request: Request, db: Session = Depends(get_db)) -> dict:
     session_token = request.cookies.get("maxshow_session")
-    user_id = active_sessions.get(session_token) if session_token else None
+    user_id = touch_session(session_token)
     user = db.get(User, user_id) if user_id else None
     if not user:
         return {

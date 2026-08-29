@@ -11,7 +11,16 @@ export const LocationPicker = ({
   const dropdownRef = useRef(null);
   const { showToast } = useToast();
 
-  const locationsList = availableLocations.length > 0 ? availableLocations : LOCATIONS;
+  // Filter out "Pune" from both available locations and fallback LOCATIONS
+  const isInvalidLocation = (loc) => {
+    if (!loc || typeof loc !== 'string') return true;
+    const clean = loc.trim().toLowerCase();
+    return clean === 'pune' || clean === 'pune, pune' || clean === 'pune city' || clean === '';
+  };
+
+  const filteredAvailableLocations = availableLocations.filter((loc) => !isInvalidLocation(loc));
+  const filteredLocations = LOCATIONS.filter((loc) => !isInvalidLocation(loc));
+  const locationsList = filteredAvailableLocations.length > 0 ? filteredAvailableLocations : filteredLocations;
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -24,6 +33,11 @@ export const LocationPicker = ({
   }, []);
 
   const handleSelect = (loc) => {
+    // Prevent selecting "Pune" even if it somehow gets through
+    if (isInvalidLocation(loc)) {
+      showToast('Please select a specific area instead of Pune');
+      return;
+    }
     onLocationChange(loc);
     setIsOpen(false);
     showToast(`Showing events near ${loc}`);
@@ -45,7 +59,11 @@ export const LocationPicker = ({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 z-50 w-52 rounded-2xl border border-stone-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in duration-150 max-h-60 overflow-y-auto">
+        <div
+          onWheel={(e) => e.stopPropagation()}
+          data-dropdown-popover
+          className="absolute right-0 mt-2 z-50 w-52 rounded-2xl border border-stone-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in duration-150 max-h-60 overflow-y-auto overscroll-contain"
+        >
           {locationsList.map((loc) => (
             <button
               key={loc}

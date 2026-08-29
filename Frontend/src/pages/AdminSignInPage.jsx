@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +13,21 @@ export const AdminSignInPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Auto-redirect if already logged in as admin
+  useEffect(() => {
+    let isMounted = true;
+    apiRequest('/api/admin/me')
+      .then((res) => {
+        if (isMounted && res && res.admin) {
+          navigate('/admin-dashboard', { replace: true });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

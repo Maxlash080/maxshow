@@ -13,14 +13,30 @@ import { CustomDatePicker } from '../components/CustomDatePicker';
 import { CustomTimePicker } from '../components/CustomTimePicker';
 import { LOCATIONS } from '../utils/constants';
 
+const getCachedAdminData = () => {
+  try {
+    const raw = sessionStorage.getItem('MAXSHOW_ADMIN_OVERVIEW');
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const setCachedAdminData = (data) => {
+  try {
+    sessionStorage.setItem('MAXSHOW_ADMIN_OVERVIEW', JSON.stringify(data));
+  } catch (_) {}
+};
+
 export const AdminDashboard = () => {
   const navigate = useNavigate();
   const { user, isAdmin, logout, refreshAuth } = useAuth();
   const { showToast } = useToast();
   const { showConfirmModal } = useConfirmModal();
 
+  const cached = getCachedAdminData();
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'users' | 'bookings'
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
 
   // Live SSE Sync States
   const [liveStatus, setLiveStatus] = useState('connecting'); // 'connected' | 'connecting' | 'offline'
@@ -55,21 +71,23 @@ export const AdminDashboard = () => {
     };
   }, [liveBanner]);
 
-  const [stats, setStats] = useState({
-    users_count: 0,
-    online_users: 0,
-    offline_users: 0,
-    events_count: 0,
-    bookings_count: 0,
-    tickets_count: 0,
-    total_revenue: 0,
-    paid_count: 0,
-    free_count: 0,
-  });
+  const [stats, setStats] = useState(
+    cached?.stats || {
+      users_count: cached?.users?.length || 0,
+      online_users: 0,
+      offline_users: cached?.users?.length || 0,
+      events_count: cached?.events?.length || 0,
+      bookings_count: cached?.bookings?.length || 0,
+      tickets_count: cached?.tickets_count || 0,
+      total_revenue: cached?.total_revenue || 0,
+      paid_count: 0,
+      free_count: 0,
+    }
+  );
 
-  const [users, setUsers] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [bookings, setBookings] = useState([]);
+  const [users, setUsers] = useState(cached?.users || []);
+  const [events, setEvents] = useState(cached?.events || []);
+  const [bookings, setBookings] = useState(cached?.bookings || []);
 
   // Search & Filter states
   const [userSearch, setUserSearch] = useState('');
@@ -156,25 +174,29 @@ export const AdminDashboard = () => {
 
   const fetchAdminData = useCallback(async (isSilent = false) => {
     try {
-      if (!isSilent) setLoading(true);
+      if (!isSilent && !getCachedAdminData()) setLoading(true);
       const data = await apiRequest('/api/admin/overview');
       if (data) {
         const s = data.stats || {};
         const uList = data.users || [];
-        setStats({
+        const evList = data.events || [];
+        const bList = data.all_bookings || data.bookings || [];
+        const newStats = {
           users_count: s.users ?? data.users_count ?? uList.length,
           online_users: s.online_users ?? s.active_users ?? (uList.filter((u) => u.is_online || u.is_active).length || 0),
           offline_users: s.offline_users ?? s.inactive_users ?? (uList.filter((u) => !u.is_online && !u.is_active).length || 0),
-          events_count: s.events ?? data.events_count ?? (data.events?.length || 0),
-          bookings_count: s.bookings ?? data.bookings_count ?? (data.all_bookings?.length || 0),
+          events_count: s.events ?? data.events_count ?? evList.length,
+          bookings_count: s.bookings ?? data.bookings_count ?? bList.length,
           tickets_count: s.tickets ?? data.tickets_count ?? 0,
           total_revenue: s.revenue ?? data.total_revenue ?? 0,
           paid_count: s.paid_bookings ?? data.paid_count ?? 0,
           free_count: s.free_bookings ?? data.free_count ?? 0,
-        });
+        };
+        setStats(newStats);
         setUsers(uList);
-        setEvents(data.events || []);
-        setBookings(data.all_bookings || data.bookings || []);
+        setEvents(evList);
+        setBookings(bList);
+        setCachedAdminData({ stats: newStats, users: uList, events: evList, bookings: bList });
       }
     } catch (err) {
       if (err.message.includes('401') || err.message.includes('403') || err.message.includes('unauthorized')) {
@@ -184,7 +206,7 @@ export const AdminDashboard = () => {
         showToast(err.message || 'Failed to load dashboard metrics');
       }
     } finally {
-      if (!isSilent) setLoading(false);
+      setLoading(false);
     }
   }, [navigate, showToast]);
 
@@ -985,52 +1007,90 @@ export const AdminDashboard = () => {
 
             {/* Events Grid */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredEvents.map((ev) => (
-                <div
-                  key={ev.id || ev.slug}
-                  className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-sm transition hover:shadow-md dark:border-slate-700/80 dark:bg-[#1c2733]"
-                >
-                  <div>
-                    <div className="relative h-48 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-                      <img src={ev.image} alt={ev.title} className="h-full w-full object-cover" />
-                      <div className="absolute top-3 left-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
-                        {ev.type || ev.event_type || 'Event'}
-                      </div>
-                      <div className="absolute top-3 right-3 rounded-full bg-coral px-2.5 py-1 text-[11px] font-bold text-white">
-                        {formatPrice(ev.price)}
-                      </div>
-                    </div>
-                    <div className="p-5">
-                      <h3 className="text-base font-black text-ink dark:text-white line-clamp-1">{ev.title}</h3>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">📍 {ev.venue || ev.location}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        🕒 {formatEventTime(ev.time, ev.day)}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{ev.description}</p>
+              {loading && events.length === 0 ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={`skeleton-event-${i}`}
+                    className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white p-4 shadow-sm dark:border-slate-700/80 dark:bg-[#1c2733] animate-pulse space-y-4"
+                  >
+                    <div className="h-44 w-full rounded-2xl bg-stone-200 dark:bg-slate-700" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-3/4 rounded bg-stone-200 dark:bg-slate-700" />
+                      <div className="h-3 w-1/2 rounded bg-stone-200 dark:bg-slate-700" />
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/60 p-4 dark:border-slate-700/60 dark:bg-[#101820]">
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                      {ev.tickets_sold || 0} tickets sold
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleOpenEditEvent(ev)}
-                        className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteEvent(ev)}
-                        className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#1c2733]"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
+                ))
+              ) : filteredEvents.length === 0 ? (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-3xl border border-dashed border-stone-300 dark:border-slate-700 p-10 text-center space-y-3 bg-white/50 dark:bg-[#1c2733]/50">
+                  <span className="text-4xl">🎪</span>
+                  <h4 className="font-black text-ink dark:text-white text-base">No published events found</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                    {eventSearch || eventCategoryFilter !== 'all' || eventLocationFilter !== 'all'
+                      ? 'No events match your current search and filter criteria.'
+                      : 'No events have been created yet.'}
+                  </p>
+                  {(eventSearch || eventCategoryFilter !== 'all' || eventLocationFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEventSearch('');
+                        setEventCategoryFilter('all');
+                        setEventLocationFilter('all');
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-coral px-4 py-2 text-xs font-bold text-white hover:bg-[#df503c] transition shadow-sm"
+                    >
+                      Clear All Filters
+                    </button>
+                  )}
                 </div>
-              ))}
+              ) : (
+                filteredEvents.map((ev) => (
+                  <div
+                    key={ev.id || ev.slug}
+                    className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-sm transition hover:shadow-md dark:border-slate-700/80 dark:bg-[#1c2733]"
+                  >
+                    <div>
+                      <div className="relative h-48 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
+                        <img src={ev.image} alt={ev.title} className="h-full w-full object-cover" />
+                        <div className="absolute top-3 left-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                          {ev.type || ev.event_type || 'Event'}
+                        </div>
+                        <div className="absolute top-3 right-3 rounded-full bg-coral px-2.5 py-1 text-[11px] font-bold text-white">
+                          {formatPrice(ev.price)}
+                        </div>
+                      </div>
+                      <div className="p-5">
+                        <h3 className="text-base font-black text-ink dark:text-white line-clamp-1">{ev.title}</h3>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">📍 {ev.venue || ev.location}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          🕒 {formatEventTime(ev.time, ev.day)}
+                        </p>
+                        <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{ev.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/60 p-4 dark:border-slate-700/60 dark:bg-[#101820]">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        {ev.tickets_sold || 0} tickets sold
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenEditEvent(ev)}
+                          className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEvent(ev)}
+                          className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#1c2733]"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         )}

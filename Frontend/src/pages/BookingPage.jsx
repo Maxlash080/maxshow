@@ -7,6 +7,7 @@ import { FALLBACK_EVENTS } from '../utils/constants';
 import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { loadRazorpay } from '../utils/razorpay';
 
 export const BookingPage = () => {
   const [searchParams] = useSearchParams();
@@ -103,16 +104,18 @@ export const BookingPage = () => {
 
     // Paid Ticket via Razorpay
     try {
+      setProcessing(true);
+      const isLoaded = await loadRazorpay();
+      if (!isLoaded || !window.Razorpay) {
+        showToast('Payment system could not be loaded. Please check your internet connection.');
+        setProcessing(false);
+        return;
+      }
+
       const orderData = await apiRequest('/api/payment/create-order', {
         method: 'POST',
         body: JSON.stringify(bookingPayload),
       });
-
-      if (!window.Razorpay) {
-        showToast('Payment system loading. Please try again in a moment.');
-        setProcessing(false);
-        return;
-      }
 
       const options = {
         key: orderData.key_id,

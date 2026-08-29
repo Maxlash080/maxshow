@@ -4,7 +4,7 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { apiRequest } from '../utils/api';
 import { FALLBACK_EVENTS } from '../utils/constants';
-import { formatPrice, formatEventTime } from '../utils/formatters';
+import { formatPrice, formatEventTime, formatBookingDateTime } from '../utils/formatters';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { loadRazorpay } from '../utils/razorpay';
@@ -92,6 +92,7 @@ export const BookingPage = () => {
           location: event.location || event.venue,
           tickets: quantity,
           total: 0,
+          booking_date: new Date().toISOString(),
         });
         showToast('Reservation confirmed! 🎉');
       } catch (err) {
@@ -153,6 +154,7 @@ export const BookingPage = () => {
               tickets: quantity,
               total: totalPrice,
               payment_id: response.razorpay_payment_id,
+              booking_date: new Date().toISOString(),
             });
             showToast('Payment verified & booking confirmed! 🎟️');
           } catch (vErr) {
@@ -228,11 +230,12 @@ export const BookingPage = () => {
               />
             </div>
 
-            <div className="rounded-2xl bg-stone-50 dark:bg-[#151f2b] p-4 max-w-sm mx-auto text-xs space-y-1 text-left">
+            <div className="rounded-2xl bg-stone-50 dark:bg-[#151f2b] p-4 max-w-sm mx-auto text-xs space-y-1.5 text-left">
               <p className="font-mono text-sm font-black text-coral text-center mb-2">
                 #{confirmedBooking.booking_code}
               </p>
               <p className="text-slate-500"><strong>Event:</strong> {confirmedBooking.title}</p>
+              <p className="text-slate-500"><strong>Booking Date:</strong> {formatBookingDateTime(confirmedBooking.booking_date || new Date())}</p>
               <p className="text-slate-500"><strong>Passes:</strong> {confirmedBooking.tickets} Ticket(s)</p>
               <p className="text-slate-500"><strong>Total Paid:</strong> {confirmedBooking.total === 0 ? 'Free Entry' : formatPrice(confirmedBooking.total)}</p>
             </div>

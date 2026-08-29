@@ -339,6 +339,7 @@ class Booking(Base):
     total_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     payment_status: Mapped[str] = mapped_column(String(40), nullable=False, default="Paid (Razorpay)")
     payment_id: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    booking_date: Mapped[DateTime | None] = mapped_column(DateTime, server_default=func.now(), nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="bookings")
@@ -659,6 +660,7 @@ class CreatePaymentOrderRequest(BaseModel):
     quantity: int = Field(ge=1, le=20)
     event_id: int | None = None
     event_slug: str | None = None
+    booking_date: str | None = None
     guest_name: str | None = None
     guest_email: str | None = None
     guest_phone: str | None = None
@@ -675,6 +677,7 @@ class BookingRequest(BaseModel):
     quantity: int = Field(ge=1, le=20)
     event_id: int | None = None
     event_slug: str | None = None
+    booking_date: str | None = None
     guest_name: str | None = None
     guest_email: str | None = None
     guest_phone: str | None = None
@@ -694,6 +697,7 @@ class VerifyPaymentRequest(BaseModel):
     quantity: int = Field(ge=1, le=20)
     event_id: int | None = None
     event_slug: str | None = None
+    booking_date: str | None = None
     guest_name: str | None = None
     guest_email: str | None = None
     guest_phone: str | None = None
@@ -772,6 +776,29 @@ def resolve_event(db: Session, event_id: int | None, event_slug: str | None, tit
     return db.query(Event).filter(Event.title.ilike(f"%{clean_title[:20]}%")).first()
 
 
+def resolve_event_type(ev: Event | None = None, title: str | None = None) -> str:
+    if ev and getattr(ev, "event_type", None):
+        return ev.event_type
+    t = (title or "").lower().strip()
+    if not t and ev:
+        t = (ev.title or "").lower().strip()
+    if "music" in t or "acoustic" in t or "blue room" in t or "band" in t or "concert" in t:
+        return "Live music"
+    if "comedy" in t or "standup" in t or "after hours" in t or "laugh" in t:
+        return "Comedy"
+    if "cinema" in t or "movie" in t or "film" in t or "rooftop" in t:
+        return "Film & outdoors"
+    if "workshop" in t or "watercolour" in t or "paint" in t or "art" in t or "craft" in t:
+        return "Creative workshop"
+    if "brunch" in t or "food" in t or "drink" in t or "social" in t or "dining" in t:
+        return "Food & drinks"
+    if "run" in t or "sunrise" in t or "fitness" in t or "yoga" in t or "sport" in t:
+        return "Community run"
+    if "picnic" in t or "vinyl" in t or "moonlight" in t or "outdoor" in t:
+        return "Outdoors"
+    return "Live Event"
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -843,6 +870,11 @@ async def lifespan(_: FastAPI):
                         text("ALTER TABLE bookings ADD COLUMN payment_id VARCHAR(100) NULL DEFAULT NULL")
                     )
                     conn.commit()
+                if "booking_date" not in b_cols:
+                    conn.execute(
+                        text("ALTER TABLE bookings ADD COLUMN booking_date DATETIME NULL")
+                    )
+                    conn.commit()
 
         # Backfill existing data
         with SessionLocal() as db:
@@ -907,6 +939,9 @@ async def lifespan(_: FastAPI):
                     e_cid = (matched_event.custom_id if matched_event else None) or generate_event_custom_id(b.event_title, b.event_time)
                     b.custom_id = generate_booking_custom_id(u_cid, e_cid, suffix=f"{b.id:04d}")
 
+                if not getattr(b, "booking_date", None):
+                    b.booking_date = b.created_at or datetime.now()
+
                 if b.total_amount == 0:
                     b.payment_status = "Free Entry"
                     b.payment_id = "FREE"
@@ -962,6 +997,7 @@ async def add_no_cache_headers(request: Request, call_next):
 INACTIVITY_TIMEOUT_SECONDS = 120  # 2 minutes of idle time before automatic session logout
 active_sessions: dict[str, int] = {}
 session_last_active: dict[str, float] = {}
+user_last_seen: dict[int, datetime] = {}
 admin_sessions: set[str] = set()
 
 
@@ -1080,7 +1116,10 @@ def touch_session(session_token: str | None) -> int | None:
                 print(f"[Touch Session Expire Error]: {e}")
         return None
     session_last_active[session_token] = now
-    return active_sessions.get(session_token)
+    uid = active_sessions.get(session_token)
+    if uid:
+        user_last_seen[uid] = datetime.now()
+    return uid
 
 
 async def session_cleanup_loop():
@@ -1982,7 +2021,7 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
     paid_count = sum(1 for b in bookings if b.total_amount > 0)
     free_count = sum(1 for b in bookings if b.total_amount == 0)
 
-    # Event sales count mapping
+    event_title_map = {e.title.lower().strip(): e for e in events}
     event_sales_map: dict[int, dict] = {e.id: {"bookings": 0, "tickets": 0, "revenue": 0} for e in events}
 
     user_bookings_map: dict[int, list] = {u.id: [] for u in users}
@@ -1991,6 +2030,9 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
     for b in bookings:
         u = user_map.get(b.user_id)
         ev = event_map.get(b.event_id) if b.event_id else None
+        if not ev and b.event_title:
+            ev = event_title_map.get(b.event_title.lower().strip())
+
         if ev and ev.id in event_sales_map:
             event_sales_map[ev.id]["bookings"] += 1
             event_sales_map[ev.id]["tickets"] += b.ticket_count
@@ -2002,6 +2044,10 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
         booking_code = b.custom_id or f"BKG-{b.id:04d}"
         user_code = (u.custom_id if u else None) or (f"USR-{b.user_id}" if u else "N/A")
         event_code = (ev.custom_id if ev else None) or (f"EVT-{b.event_id}" if b.event_id else "N/A")
+        b_event_type = resolve_event_type(ev, b.event_title)
+
+        b_date = getattr(b, "booking_date", None) or b.created_at
+        booking_date_iso = b_date.isoformat() if b_date else ""
 
         booking_item = {
             "id": b.id,
@@ -2015,12 +2061,16 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
             "event_id": b.event_id,
             "event_code": event_code,
             "title": b.event_title,
+            "event_title": b.event_title,
+            "event_type": b_event_type,
+            "type": b_event_type,
             "location": b.event_location,
             "time": b.event_time,
             "tickets": b.ticket_count,
             "total": b.total_amount,
             "payment_status": payment_status,
             "payment_id": payment_id,
+            "booking_date": booking_date_iso,
             "created_at": b.created_at.isoformat() if b.created_at else "",
         }
         all_bookings_list.append(booking_item)
@@ -2031,12 +2081,16 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
                 "event_id": b.event_id,
                 "event_code": event_code,
                 "title": b.event_title,
+                "event_title": b.event_title,
+                "event_type": b_event_type,
+                "type": b_event_type,
                 "location": b.event_location,
                 "time": b.event_time,
                 "tickets": b.ticket_count,
                 "total": b.total_amount,
                 "payment_status": payment_status,
                 "payment_id": payment_id,
+                "booking_date": booking_date_iso,
                 "created_at": b.created_at.isoformat() if b.created_at else "",
             })
 
@@ -2049,6 +2103,7 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
         u_total_spent = sum(item["total"] for item in u_bookings)
         u_ticket_count = sum(item["tickets"] for item in u_bookings)
         is_user_online = (u.id in logged_in_user_ids)
+        last_online_dt = user_last_seen.get(u.id) or u.created_at
         users_list.append({
             "id": u.id,
             "user_id": u.custom_id or generate_user_custom_id(u.full_name, u.phone_number),
@@ -2057,6 +2112,9 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
             "email": u.email,
             "phone": u.phone_number,
             "created_at": u.created_at.isoformat() if u.created_at else "",
+            "joined_at": u.created_at.isoformat() if u.created_at else "",
+            "last_active": last_online_dt.isoformat() if last_online_dt else "",
+            "last_online": last_online_dt.isoformat() if last_online_dt else "",
             "total_spent": u_total_spent,
             "ticket_count": u_ticket_count,
             "bookings_count": len(u_bookings),
@@ -2269,6 +2327,8 @@ def get_user_bookings(user_id: int, request: Request, db: Session = Depends(get_
     for b in bookings:
         ev = b.event or (db.get(Event, b.event_id) if b.event_id else None)
         is_free = (b.total_amount == 0) or (getattr(b, "payment_status", "") == "Free Entry")
+        b_date = getattr(b, "booking_date", None) or b.created_at
+        b_event_type = resolve_event_type(ev, b.event_title)
         results.append({
             "id": b.id,
             "booking_id": b.custom_id or f"BKG-{b.id:04d}",
@@ -2276,6 +2336,8 @@ def get_user_bookings(user_id: int, request: Request, db: Session = Depends(get_
             "event_id": b.event_id,
             "title": b.event_title,
             "event_title": b.event_title,
+            "event_type": b_event_type,
+            "type": b_event_type,
             "location": b.event_location,
             "time": b.event_time,
             "tickets": b.ticket_count,
@@ -2283,6 +2345,7 @@ def get_user_bookings(user_id: int, request: Request, db: Session = Depends(get_
             "total": b.total_amount,
             "payment_status": "Free Entry" if is_free else (getattr(b, "payment_status", None) or "Paid (Razorpay)"),
             "payment_id": "FREE" if is_free else getattr(b, "payment_id", None),
+            "booking_date": b_date.isoformat() if b_date else "",
             "created_at": b.created_at.isoformat() if b.created_at else "",
         })
     return {"bookings": results, "count": len(results)}
@@ -2392,6 +2455,7 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
         total_amount=payload.price * payload.quantity,
         payment_status="Free Entry" if payload.price == 0 else "Paid",
         payment_id="FREE" if payload.price == 0 else None,
+        booking_date=datetime.now(),
     )
     db.add(booking)
     db.commit()
@@ -2405,6 +2469,8 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
         "event_title": booking.event_title,
         "tickets": booking.ticket_count,
         "total": booking.total_amount,
+        "booking_date": (booking.booking_date or booking.created_at).isoformat() if (booking.booking_date or booking.created_at) else "",
+        "created_at": booking.created_at.isoformat() if booking.created_at else "",
     })
     return {"message": "Tickets booked successfully.", "booking_id": booking.custom_id or str(booking.id)}
 
@@ -2443,6 +2509,7 @@ def create_payment_order(
             total_amount=0,
             payment_status="Free Entry",
             payment_id="FREE",
+            booking_date=datetime.now(),
         )
         db.add(booking)
         db.commit()
@@ -2456,6 +2523,8 @@ def create_payment_order(
             "event_title": booking.event_title,
             "tickets": booking.ticket_count,
             "total": 0,
+            "booking_date": (booking.booking_date or booking.created_at).isoformat() if (booking.booking_date or booking.created_at) else "",
+            "created_at": booking.created_at.isoformat() if booking.created_at else "",
         })
         return {
             "free": True,
@@ -2530,6 +2599,7 @@ def verify_payment(
         total_amount=payload.price * payload.quantity,
         payment_status="Paid (Razorpay)",
         payment_id=payload.razorpay_payment_id,
+        booking_date=datetime.now(),
     )
     db.add(booking)
     db.commit()
@@ -2543,6 +2613,8 @@ def verify_payment(
         "event_title": booking.event_title,
         "tickets": booking.ticket_count,
         "total": booking.total_amount,
+        "booking_date": (booking.booking_date or booking.created_at).isoformat() if (booking.booking_date or booking.created_at) else "",
+        "created_at": booking.created_at.isoformat() if booking.created_at else "",
     })
 
     return {
@@ -2563,6 +2635,8 @@ def user_dashboard(request: Request, db: Session = Depends(get_db)) -> dict:
     for b in bookings:
         ev = b.event or (db.get(Event, b.event_id) if b.event_id else None)
         is_free = (b.total_amount == 0) or (getattr(b, "payment_status", "") == "Free Entry")
+        b_date = getattr(b, "booking_date", None) or b.created_at
+        b_event_type = resolve_event_type(ev, b.event_title)
         booking_results.append({
             "id": b.id,
             "booking_id": b.custom_id or f"BKG-{b.id:04d}",
@@ -2572,6 +2646,8 @@ def user_dashboard(request: Request, db: Session = Depends(get_db)) -> dict:
             "event_image": ev.image if ev else "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85",
             "title": b.event_title,
             "event_title": b.event_title,
+            "event_type": b_event_type,
+            "type": b_event_type,
             "location": b.event_location,
             "time": b.event_time,
             "tickets": b.ticket_count,
@@ -2579,6 +2655,7 @@ def user_dashboard(request: Request, db: Session = Depends(get_db)) -> dict:
             "total": b.total_amount,
             "payment_status": "Free Entry" if is_free else (getattr(b, "payment_status", None) or "Paid (Razorpay)"),
             "payment_id": "FREE" if is_free else getattr(b, "payment_id", None),
+            "booking_date": b_date.isoformat() if b_date else "",
             "created_at": b.created_at.isoformat() if b.created_at else "",
         })
 
@@ -2611,6 +2688,8 @@ def list_bookings(request: Request, db: Session = Depends(get_db)) -> dict:
     for booking in bookings:
         ev = booking.event or (db.get(Event, booking.event_id) if booking.event_id else None)
         is_free = (booking.total_amount == 0) or (getattr(booking, "payment_status", "") == "Free Entry")
+        b_date = getattr(booking, "booking_date", None) or booking.created_at
+        b_event_type = resolve_event_type(ev, booking.event_title)
         results.append({
             "id": booking.id,
             "booking_id": booking.custom_id or f"BKG-{booking.id:04d}",
@@ -2618,12 +2697,16 @@ def list_bookings(request: Request, db: Session = Depends(get_db)) -> dict:
             "event_slug": ev.slug if ev else None,
             "event_image": ev.image if ev else "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85",
             "title": booking.event_title,
+            "event_title": booking.event_title,
+            "event_type": b_event_type,
+            "type": b_event_type,
             "location": booking.event_location,
             "time": booking.event_time,
             "tickets": booking.ticket_count,
             "total": booking.total_amount,
             "payment_status": "Free Entry" if is_free else (getattr(booking, "payment_status", None) or "Paid (Razorpay)"),
             "payment_id": "FREE" if is_free else getattr(booking, "payment_id", None),
+            "booking_date": b_date.isoformat() if b_date else "",
             "created_at": booking.created_at.isoformat() if booking.created_at else "",
         })
     return {"bookings": results}

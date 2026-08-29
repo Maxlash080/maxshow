@@ -109,3 +109,63 @@ export const validateIndianMobile = (phone) => {
   return { isValid: true, error: '', cleanNumber: digits };
 };
 
+/**
+ * Format Booking Date (e.g. "29 Aug 2026")
+ */
+export const formatBookingDate = (dateStr) => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch (_) {
+    return String(dateStr);
+  }
+};
+
+/**
+ * Format Booking Time (e.g. "03:07 PM")
+ */
+export const formatBookingTime = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch (_) {
+    return '';
+  }
+};
+
+/**
+ * Format Booking Date & Time (e.g. "29 Aug 2026, 03:07 PM")
+ */
+export const formatBookingDateTime = (dateStr) => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    const dateFormatted = d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const timeFormatted = d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `${dateFormatted}, ${timeFormatted}`;
+  } catch (_) {
+    return String(dateStr);
+  }
+};
+

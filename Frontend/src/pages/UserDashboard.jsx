@@ -6,7 +6,7 @@ import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirmModal } from '../context/ModalContext';
-import { formatPrice, formatEventTime, validateIndianMobile } from '../utils/formatters';
+import { formatPrice, formatEventTime, formatBookingDate, formatBookingDateTime, formatBookingTime, validateIndianMobile } from '../utils/formatters';
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 
 export const UserDashboard = () => {
@@ -374,18 +374,10 @@ export const UserDashboard = () => {
                             />
                           )}
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-black">
-                                Confirmed
-                              </span>
-                              <span className="font-mono text-xs font-bold text-coral">
-                                #{b.booking_code || `BKG-${b.id}`}
-                              </span>
-                            </div>
-                            <h3 className="mt-1 text-lg font-black text-ink dark:text-white group-hover:text-coral transition">
+                            <h3 className="text-lg font-black text-ink dark:text-white group-hover:text-coral transition">
                               {b.title || b.event_title || 'Event'}
                             </h3>
-                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-300">
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
                               📍 {b.location || ''} {timeFormatted ? `· 🕒 ${timeFormatted}` : ''}
                             </p>
                           </div>
@@ -508,104 +500,96 @@ export const UserDashboard = () => {
         )}
       </main>
 
-      {/* Redesigned QR Code / Digital Ticket Pass Modal */}
+      {/* Redesigned Landscape Boarding-Pass Digital Ticket Modal */}
       {selectedBooking && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200"
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedBooking(null);
           }}
         >
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-200">
-            {/* Header Ticket Section */}
-            <div className="bg-stone-900 text-white p-5 sm:p-6 pb-5">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400 ring-1 ring-emerald-500/30">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Verified Digital Ticket
-                </span>
-                <button
-                  onClick={() => setSelectedBooking(null)}
-                  className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-white hover:bg-white/25 transition"
-                  aria-label="Close pass"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="mt-3.5">
-                <h3 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                  {selectedBooking.title || selectedBooking.event_title || 'Event Pass'}
-                </h3>
-                <p className="mt-1 text-xs sm:text-sm text-slate-300 font-medium">
-                  📍 {selectedBooking.location || 'Venue details inside'}
-                </p>
-                {selectedBooking.time && (
-                  <p className="text-xs sm:text-sm text-coral font-bold mt-0.5">
-                    🕒 {formatEventTime(selectedBooking.time, selectedBooking.day)}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Perforated Tear Divider */}
-            <div className="relative flex items-center justify-between bg-stone-900 py-1">
-              <div className="h-5 w-5 -ml-2.5 rounded-full bg-black/80" />
-              <div className="w-full border-t-2 border-dashed border-stone-700/80 mx-2" />
-              <div className="h-5 w-5 -mr-2.5 rounded-full bg-black/80" />
-            </div>
-
-            {/* Ticket Body: QR Code & Booking Details */}
-            <div className="p-5 sm:p-6 space-y-4 bg-white dark:bg-[#1c2733]">
-              {/* QR Container */}
-              <div className="flex flex-col items-center justify-center">
-                <div className="p-3.5 bg-white rounded-2xl shadow-md border border-stone-200">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
-                      selectedBooking.booking_code || `BKG-${selectedBooking.id}`
-                    )}`}
-                    alt="Ticket QR Code"
-                    className="h-36 w-36 sm:h-44 sm:w-44 mx-auto object-contain"
-                  />
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-[#18222e] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-200 flex flex-col md:flex-row max-h-[92vh] overflow-y-auto md:overflow-visible">
+            
+            {/* Left Side: Event Details & Systematic Breakdown */}
+            <div className="flex-1 p-5 sm:p-6 md:p-7 flex flex-col justify-between space-y-4">
+              <div>
+                {/* Status Badge & Mobile Close */}
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-black text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Verified Digital Ticket
+                  </span>
+                  <button
+                    onClick={() => setSelectedBooking(null)}
+                    className="md:hidden grid h-8 w-8 place-items-center rounded-full bg-stone-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-coral hover:text-white transition"
+                    aria-label="Close pass"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <p className="mt-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                  Present this QR code at the venue gate for check-in
-                </p>
+
+                {/* Event Title */}
+                <h2 className="mt-2.5 text-xl sm:text-2xl font-black text-ink dark:text-white leading-tight">
+                  {selectedBooking.title || selectedBooking.event_title || 'Event Pass'}
+                </h2>
+
+                {/* Meta: Venue & Time */}
+                <div className="mt-2 flex flex-wrap items-center gap-y-1 gap-x-4 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
+                  <span className="flex items-center gap-1">
+                    <span>📍</span>
+                    <span>{selectedBooking.location || 'Venue details inside'}</span>
+                  </span>
+                  {selectedBooking.time && (
+                    <span className="flex items-center gap-1 text-coral font-bold">
+                      <span>🕒</span>
+                      <span>{formatEventTime(selectedBooking.time, selectedBooking.day)}</span>
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Booking Reference with Copy */}
-              <div className="flex items-center justify-between rounded-2xl bg-stone-100 dark:bg-[#101820] p-3 border border-stone-200/80 dark:border-slate-800">
+              {/* Booking Reference Box */}
+              <div className="flex items-center justify-between rounded-2xl bg-stone-50 dark:bg-[#101820] p-3 sm:p-3.5 border border-stone-200/80 dark:border-slate-800">
                 <div className="text-left">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Booking Reference</p>
-                  <p className="font-mono text-sm font-black text-coral">
+                  <p className="font-mono text-sm sm:text-base font-black text-coral mt-0.5">
                     #{selectedBooking.booking_code || `BKG-${selectedBooking.id}`}
                   </p>
                 </div>
                 <button
                   onClick={() => handleCopyCode(selectedBooking.booking_code || `BKG-${selectedBooking.id}`)}
                   type="button"
-                  className="flex items-center gap-1 rounded-xl bg-white dark:bg-[#1c2733] px-3 py-1.5 text-xs font-bold text-ink dark:text-white shadow-sm hover:text-coral transition border border-stone-200 dark:border-slate-700"
+                  className="flex items-center gap-1.5 rounded-xl bg-white dark:bg-[#1c2733] px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-bold text-ink dark:text-white shadow-sm hover:text-coral transition border border-stone-200 dark:border-slate-700"
                 >
                   <span>📋</span>
                   <span>Copy</span>
                 </button>
               </div>
 
-              {/* Summary Breakdown Grid */}
-              <div className="grid grid-cols-3 gap-2 text-center rounded-2xl bg-stone-50 dark:bg-[#101820]/60 p-3 border border-stone-100 dark:border-slate-800">
-                <div>
+              {/* Systematic 4-Column Breakdown Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-2xl bg-stone-50 dark:bg-[#101820]/60 p-3 border border-stone-100 dark:border-slate-800 text-center">
+                <div className="flex flex-col justify-center py-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Attendee</p>
                   <p className="mt-0.5 text-xs font-bold text-ink dark:text-white truncate">
                     {user?.name?.split(' ')[0] || 'Guest'}
                   </p>
                 </div>
-                <div>
+                <div className="flex flex-col justify-center py-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Booked On</p>
+                  <p className="mt-0.5 text-xs font-bold text-ink dark:text-white">
+                    {formatBookingDate(selectedBooking.booking_date || selectedBooking.created_at)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">
+                    {formatBookingTime(selectedBooking.booking_date || selectedBooking.created_at)}
+                  </p>
+                </div>
+                <div className="flex flex-col justify-center py-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Reserved</p>
                   <p className="mt-0.5 text-xs font-black text-ink dark:text-white">
                     {selectedBooking.tickets || selectedBooking.quantity || 1} Ticket{(selectedBooking.tickets || selectedBooking.quantity || 1) === 1 ? '' : 's'}
                   </p>
                 </div>
-                <div>
+                <div className="flex flex-col justify-center py-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Paid</p>
                   <p className="mt-0.5 text-xs font-black text-coral">
                     {Number(selectedBooking.total ?? selectedBooking.total_amount ?? 0) === 0 || selectedBooking.payment_status === 'Free Entry'
@@ -615,37 +599,68 @@ export const UserDashboard = () => {
                 </div>
               </div>
 
-              {/* Share & Actions */}
-              <div className="space-y-2 pt-1">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleShareTicket(selectedBooking)}
-                    type="button"
-                    className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-coral to-orange-500 py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md hover:from-[#df503c] hover:to-orange-600 transition active:scale-[0.98]"
-                  >
-                    <span>📤</span>
-                    <span>Share Pass</span>
-                  </button>
-                  <button
-                    onClick={() => handleWhatsAppShare(selectedBooking)}
-                    type="button"
-                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md transition active:scale-[0.98]"
-                    title="Share on WhatsApp"
-                  >
-                    <span>💬</span>
-                    <span>WhatsApp</span>
-                  </button>
-                </div>
-
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
-                  onClick={() => setSelectedBooking(null)}
+                  onClick={() => handleShareTicket(selectedBooking)}
                   type="button"
-                  className="w-full rounded-2xl bg-stone-100 dark:bg-slate-800 py-2.5 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-stone-200 dark:hover:bg-slate-700 transition"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-coral to-orange-500 py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md hover:from-[#df503c] hover:to-orange-600 transition active:scale-[0.98]"
                 >
-                  Done
+                  <span>📤</span>
+                  <span>Share Pass</span>
+                </button>
+                <button
+                  onClick={() => handleWhatsAppShare(selectedBooking)}
+                  type="button"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 py-3 px-4 text-xs sm:text-sm font-bold text-white shadow-md transition active:scale-[0.98]"
+                  title="Share on WhatsApp"
+                >
+                  <span>💬</span>
+                  <span>WhatsApp</span>
                 </button>
               </div>
             </div>
+
+            {/* Perforated Divider (Vertical on desktop, Horizontal on mobile) */}
+            <div className="relative flex md:flex-col items-center justify-between bg-stone-900 py-1 md:py-0 md:px-1">
+              <div className="h-5 w-5 -ml-2.5 md:-ml-0 md:-mt-2.5 rounded-full bg-black/80" />
+              <div className="w-full md:w-0 md:h-full border-t-2 md:border-t-0 md:border-l-2 border-dashed border-stone-700 mx-2 md:mx-0 md:my-2" />
+              <div className="h-5 w-5 -mr-2.5 md:-mr-0 md:-mb-2.5 rounded-full bg-black/80" />
+            </div>
+
+            {/* Right Side: QR Code Stub Section */}
+            <div className="w-full md:w-72 bg-stone-900 text-white p-6 sm:p-7 flex flex-col items-center justify-center text-center relative">
+              <button
+                onClick={() => setSelectedBooking(null)}
+                className="hidden md:grid absolute top-4 right-4 h-8 w-8 place-items-center rounded-full bg-white/10 text-white hover:bg-white/25 transition"
+                aria-label="Close pass"
+              >
+                ✕
+              </button>
+
+              {/* QR Container */}
+              <div className="p-3 bg-white rounded-2xl shadow-lg border border-stone-200">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                    selectedBooking.booking_code || `BKG-${selectedBooking.id}`
+                  )}`}
+                  alt="Ticket QR Code"
+                  className="h-32 w-32 sm:h-36 sm:w-36 mx-auto object-contain"
+                />
+              </div>
+
+              <p className="mt-3 text-[11px] font-semibold text-slate-400 max-w-[200px]">
+                Present this QR code at the venue gate for check-in
+              </p>
+
+              <div className="mt-3 pt-3 border-t border-stone-800 w-full">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Entry Pass</p>
+                <p className="font-mono text-xs font-black text-coral mt-0.5">
+                  #{selectedBooking.booking_code || `BKG-${selectedBooking.id}`}
+                </p>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

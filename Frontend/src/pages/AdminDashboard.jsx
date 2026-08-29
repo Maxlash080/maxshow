@@ -4,7 +4,7 @@ import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirmModal } from '../context/ModalContext';
-import { formatPrice, formatEventTime } from '../utils/formatters';
+import { formatPrice, formatEventTime, formatBookingDate, formatBookingDateTime, formatBookingTime } from '../utils/formatters';
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { LocationFilterDropdown } from '../components/LocationFilterDropdown';
@@ -701,7 +701,13 @@ export const AdminDashboard = () => {
           (b.booking_code || '').toLowerCase().includes(q) ||
           (b.user_name || '').toLowerCase().includes(q) ||
           (b.user_email || '').toLowerCase().includes(q) ||
-          (b.event_title || '').toLowerCase().includes(q)
+          (b.event_title || '').toLowerCase().includes(q) ||
+          (b.event_type || '').toLowerCase().includes(q) ||
+          (b.type || '').toLowerCase().includes(q) ||
+          (b.booking_date || '').toLowerCase().includes(q) ||
+          (b.created_at || '').toLowerCase().includes(q) ||
+          formatBookingDate(b.booking_date || b.created_at).toLowerCase().includes(q) ||
+          formatBookingDateTime(b.booking_date || b.created_at).toLowerCase().includes(q)
       );
     }
     return result;
@@ -1184,12 +1190,12 @@ export const AdminDashboard = () => {
                   return (
                     <div
                       key={u.id}
-                      className={`flex flex-col justify-between rounded-3xl border p-5 shadow-sm transition-all duration-300 ${
+                      className={`rounded-3xl border bg-white p-5 shadow-sm hover:shadow-md transition-all duration-300 dark:bg-[#1c2733] flex flex-col justify-between ${
                         isJustRegistered
-                          ? 'border-emerald-500 ring-2 ring-emerald-400/40 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-md animate-in zoom-in-95'
+                          ? 'border-emerald-400 dark:border-emerald-500 shadow-md ring-2 ring-emerald-400/20'
                           : isOnline
-                          ? 'border-emerald-200/80 bg-white dark:border-emerald-900/40 dark:bg-[#1c2733]'
-                          : 'border-stone-200/80 bg-white dark:border-slate-700/80 dark:bg-[#1c2733]'
+                          ? 'border-emerald-200 dark:border-emerald-900/60 shadow-emerald-500/5'
+                          : 'border-stone-200 dark:border-slate-700'
                       }`}
                     >
                       <div>
@@ -1199,52 +1205,58 @@ export const AdminDashboard = () => {
                               isJustRegistered
                                 ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 animate-pulse'
                                 : isOnline
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                                : 'bg-stone-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30'
+                                : 'bg-stone-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
                             }`}
                           >
                             {initial}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <h4 className="font-black text-ink dark:text-white truncate">{u.name}</h4>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <h4 className="font-black text-ink dark:text-white truncate text-sm sm:text-base">{u.name}</h4>
                               {isJustRegistered ? (
-                                <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm animate-pulse">
-                                  ✨ Live New
+                                <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm animate-pulse shrink-0">
+                                  ✨ New
                                 </span>
                               ) : isOnline ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
                                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                   Online
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">
                                   <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
                                   Offline
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs font-bold text-coral truncate">@{u.username}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{u.email}</p>
-                            <p className="mt-1 text-[11px] font-semibold text-slate-400">ID: {u.custom_id || `USR-${u.id}`}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 truncate" title={u.email}>
+                              {u.email}
+                            </p>
+                            {u.phone && (
+                              <p className="mt-0.5 text-[11px] text-slate-400 font-semibold truncate">
+                                📞 {u.phone}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 dark:border-slate-700">
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                          {u.bookings_count || 0} booking{(u.bookings_count || 0) === 1 ? '' : 's'}
+                      <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-3 dark:border-slate-700/80">
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <span>🎟️</span>
+                          <span>{u.bookings_count || 0} booking{(u.bookings_count || 0) === 1 ? '' : 's'}</span>
                         </span>
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleOpenUserDetails(u)}
-                            className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300"
+                            className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 shadow-sm"
                           >
                             Details
                           </button>
                           <button
                             onClick={() => handleDeleteUser(u)}
-                            className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#101820]"
+                            className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50 transition dark:border-slate-700 dark:bg-[#101820] shadow-sm"
                           >
                             Delete
                           </button>
@@ -1307,7 +1319,8 @@ export const AdminDashboard = () => {
                   <tr>
                     <th className="px-5 py-3.5">Booking ID</th>
                     <th className="px-5 py-3.5">User</th>
-                    <th className="px-5 py-3.5">Event</th>
+                    <th className="px-5 py-3.5">Event Type</th>
+                    <th className="px-5 py-3.5">Booking Date</th>
                     <th className="px-5 py-3.5">Tickets</th>
                     <th className="px-5 py-3.5">Amount</th>
                     <th className="px-5 py-3.5">Status</th>
@@ -1317,6 +1330,7 @@ export const AdminDashboard = () => {
                 <tbody className="divide-y divide-stone-100 dark:divide-slate-700">
                   {filteredBookings.map((b) => {
                     const isFree = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
+                    const bookingDateVal = b.booking_date || b.created_at;
                     return (
                       <tr key={b.id || b.booking_code} className="hover:bg-stone-50/50 dark:hover:bg-slate-800/50 transition">
                         <td className="px-5 py-4 font-mono font-bold text-coral">{b.booking_code || `BKG-${b.id}`}</td>
@@ -1324,8 +1338,19 @@ export const AdminDashboard = () => {
                           <p className="font-bold text-ink dark:text-white">{b.user_name || 'Guest'}</p>
                           <p className="text-xs text-slate-400">{b.user_email || '—'}</p>
                         </td>
-                        <td className="px-5 py-4 font-semibold text-ink dark:text-white max-w-[200px] truncate">
-                          {b.event_title || 'Event'}
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-coral/10 dark:bg-coral/20 px-3 py-1 text-xs font-bold text-coral border border-coral/20 dark:border-coral/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-coral"></span>
+                            {b.event_type || b.type || b.category || b.event_title || 'Live Event'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <p className="font-bold text-ink dark:text-white">
+                            {formatBookingDate(bookingDateVal)}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {formatBookingTime(bookingDateVal)}
+                          </p>
                         </td>
                         <td className="px-5 py-4 font-bold">{b.quantity || b.tickets || 1}</td>
                         <td className="px-5 py-4 font-bold text-ink dark:text-white">
@@ -1360,195 +1385,223 @@ export const AdminDashboard = () => {
         )}
       </main>
 
-      {/* MODAL 1: Enriched User Details Modal */}
+      {/* MODAL 1: Redesigned 2-Column Split User Details Modal */}
       {selectedUser && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedUser(null);
           }}
         >
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto overscroll-contain modal-scroll-contain rounded-[2.5rem] bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-6 sm:p-8 space-y-6 no-scrollbar">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-stone-100 pb-4 dark:border-slate-700">
-              <div className="flex items-center gap-3.5">
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-coral text-xl font-black text-white shadow-md">
-                  {selectedUser.name?.charAt(0)?.toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl sm:text-2xl font-black text-ink dark:text-white">{selectedUser.name}</h3>
-                    <span className="rounded-full bg-coral/10 px-2.5 py-0.5 text-[10px] font-black uppercase text-coral dark:bg-coral/20">
-                      Member
-                    </span>
-                  </div>
-                  <p className="text-xs font-bold text-coral">@{selectedUser.username}</p>
-                </div>
+          <div className="w-full max-w-5xl max-h-[92vh] overflow-y-auto overscroll-contain modal-scroll-contain rounded-3xl bg-white shadow-2xl dark:bg-[#18222e] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-5 sm:p-7 space-y-4 no-scrollbar">
+            
+            {/* Top Bar with Title & Close button */}
+            <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm sm:text-base font-black text-ink dark:text-white">User Profile & Activity</span>
+                <span className="rounded-full bg-coral/10 dark:bg-coral/20 px-2.5 py-0.5 text-xs font-bold text-coral">
+                  User #{selectedUser.id} of the website
+                </span>
               </div>
               <button
                 onClick={() => setSelectedUser(null)}
-                className="grid h-9 w-9 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-white transition"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-white transition"
+                aria-label="Close user modal"
               >
                 ✕
               </button>
             </div>
 
-            {/* Comprehensive Meta Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Email Address</p>
-                <p className="font-bold text-ink dark:text-white mt-1 truncate" title={selectedUser.email}>
-                  {selectedUser.email}
-                </p>
-                <span className="text-[10px] text-emerald-600 font-bold dark:text-emerald-400">✓ Verified</span>
-              </div>
-
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Mobile Number</p>
-                <p className="font-bold text-ink dark:text-white mt-1 truncate">
-                  {selectedUser.phone || selectedUser.phone_number || selectedUser.mobile || 'Not provided'}
-                </p>
-                <span className="text-[10px] text-slate-400 font-semibold">Contact</span>
-              </div>
-
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Account ID</p>
-                <p className="font-mono font-bold text-coral mt-1 truncate">
-                  #{selectedUser.user_id || selectedUser.custom_id || `USR-${selectedUser.id}`}
-                </p>
-                <span className="text-[10px] text-slate-400 font-semibold">Unique User Ref</span>
-              </div>
-
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Total Bookings</p>
-                <p className="font-black text-ink dark:text-white text-base mt-0.5">
-                  {userBookings.length || selectedUser.bookings_count || 0}
-                </p>
-                <span className="text-[10px] text-slate-400">Reservations</span>
-              </div>
-
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Total Tickets</p>
-                <p className="font-black text-ink dark:text-white text-base mt-0.5">
-                  {userBookings.reduce((sum, b) => sum + (Number(b.tickets || b.quantity) || 0), 0) || selectedUser.ticket_count || 0}
-                </p>
-                <span className="text-[10px] text-slate-400">Passes Issued</span>
-              </div>
-
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Account Status</p>
-                <div className="mt-1 flex items-center gap-1.5">
-                  {(selectedUser.is_online || selectedUser.is_active) ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-600 dark:text-emerald-400">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Online
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-400">
-                      <span className="h-2 w-2 rounded-full bg-slate-400"></span>
-                      Offline
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] text-slate-400 font-semibold">Live Session</span>
-              </div>
-
-              <div className="rounded-2xl bg-stone-50 p-3.5 dark:bg-[#151f2b] border border-stone-100 dark:border-slate-800">
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Total Spent</p>
-                <p className="font-black text-coral text-base mt-0.5">
-                  {formatPrice(
-                    userBookings.reduce((sum, b) => sum + (Number(b.total ?? b.total_amount ?? 0) || 0), 0) || selectedUser.total_spent || 0
-                  )}
-                </p>
-                <span className="text-[10px] text-slate-400">Cumulative spend</span>
-              </div>
-            </div>
-
-            {/* Bookings History Section */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Bookings History ({userBookings.length})
-                </h4>
-                {selectedUser.created_at && (
-                  <span className="text-[11px] text-slate-400 font-semibold">
-                    Joined: {new Date(selectedUser.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                )}
-              </div>
-
-              {loadingUserBookings ? (
-                <div className="rounded-2xl bg-stone-50 dark:bg-[#151f2b] p-6 text-center text-xs text-slate-400">
-                  Loading bookings history...
-                </div>
-              ) : userBookings.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-stone-200 dark:border-slate-700 p-6 text-center space-y-1">
-                  <span className="text-2xl">🎟️</span>
-                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">No bookings recorded for this user yet.</p>
-                  <p className="text-[11px] text-slate-400">When the user books passes, their orders will appear here.</p>
-                </div>
-              ) : (
-                <div className="max-h-56 overflow-y-auto overscroll-contain space-y-2.5 no-scrollbar pr-1">
-                  {userBookings.map((b) => {
-                    const isFreeBooking = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
-                    return (
-                      <div
-                        key={b.id || b.booking_code}
-                        className="rounded-2xl border border-stone-200/90 p-3.5 text-xs dark:border-slate-700/80 dark:bg-[#151f2b] shadow-sm space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-black text-sm text-ink dark:text-white">{b.title || b.event_title || 'Experience'}</p>
-                            <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
-                              📍 {b.location || 'MAXSHOW Venue'} {b.time ? `· 🕒 ${b.time}` : ''}
-                            </p>
-                          </div>
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase whitespace-nowrap ${
-                              isFreeBooking
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
-                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                            }`}
-                          >
-                            {isFreeBooking ? 'Free Entry' : b.payment_status || 'Paid'}
+            {/* 2-Column Split Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              
+              {/* LEFT COLUMN: Profile, Credentials & Metrics (5 cols) */}
+              <div className="lg:col-span-5 space-y-4 flex flex-col justify-between">
+                <div className="space-y-4">
+                  {/* Profile Hero Card */}
+                  <div className="rounded-2xl bg-gradient-to-r from-stone-900 via-[#1c2733] to-stone-900 text-white p-4 sm:p-5 border border-stone-800 shadow-md flex items-center gap-3.5">
+                    <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-coral to-orange-500 text-2xl font-black text-white shadow-lg shrink-0 ring-2 ring-white/10">
+                      {selectedUser.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-lg sm:text-xl font-black text-white leading-tight truncate">{selectedUser.name}</h3>
+                      <div className="mt-1">
+                        {(selectedUser.is_online || selectedUser.is_active) ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-bold text-emerald-400 ring-1 ring-emerald-500/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            ONLINE · Active Now
                           </span>
-                        </div>
-
-                        <div className="flex items-center justify-between border-t border-stone-100 pt-2 dark:border-slate-800 text-[11px]">
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono font-bold text-coral">#{b.booking_code || b.booking_id || `BKG-${b.id}`}</span>
-                            <span className="font-bold text-slate-600 dark:text-slate-300">
-                              {b.tickets || b.quantity || 1} pass{b.tickets > 1 ? 'es' : ''} · {isFreeBooking ? 'Free' : formatPrice(b.total ?? b.total_amount ?? 0)}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleCancelBooking(b)}
-                            className="font-bold text-red-500 hover:text-red-700 dark:hover:text-red-400 transition"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                            OFFLINE, LAST ONLINE: {formatBookingDateTime(selectedUser.last_online || selectedUser.last_active || selectedUser.created_at)}
+                          </span>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      {(selectedUser.created_at || selectedUser.joined_at) && (
+                        <p className="mt-1.5 text-slate-400 text-[11px] flex items-center gap-1">
+                          <span>📅</span>
+                          <span>Joined: {formatBookingDateTime(selectedUser.created_at || selectedUser.joined_at)}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
-            {/* Footer Actions */}
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-              <button
-                onClick={() => handleDeleteUser(selectedUser)}
-                className="w-full rounded-2xl border border-red-300 bg-red-50 py-3 text-xs sm:text-sm font-bold text-red-600 hover:bg-red-100 transition dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
-              >
-                Delete User
-              </button>
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="w-full rounded-2xl bg-ink py-3 text-xs sm:text-sm font-bold text-white hover:bg-slate-800 transition dark:bg-slate-700"
-              >
-                Close
-              </button>
+                  {/* Contact & Credentials */}
+                  <div className="rounded-2xl bg-stone-50 dark:bg-[#121922] p-4 border border-stone-100 dark:border-slate-800 space-y-2.5">
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Contact & Credentials</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-[#18222e] border border-stone-100 dark:border-slate-800 shadow-sm">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold">Username:</span>
+                        <span className="font-bold text-coral">@{selectedUser.username || 'user'}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-[#18222e] border border-stone-100 dark:border-slate-800 shadow-sm">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold">User ID:</span>
+                        <span className="font-mono font-bold text-slate-700 dark:text-slate-200">
+                          #{selectedUser.user_id || selectedUser.custom_id || `USR-${selectedUser.id}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-[#18222e] border border-stone-100 dark:border-slate-800 shadow-sm">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold">Email:</span>
+                        <span className="font-bold text-ink dark:text-white truncate max-w-[180px]" title={selectedUser.email}>
+                          {selectedUser.email}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-[#18222e] border border-stone-100 dark:border-slate-800 shadow-sm">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold">Phone:</span>
+                        <span className="font-bold text-ink dark:text-white">
+                          {selectedUser.phone || selectedUser.phone_number || selectedUser.mobile || 'Not provided'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Balanced 2-Column Metrics Strip: Bookings & Total Spend */}
+                  <div className="grid grid-cols-2 gap-3 text-center text-xs">
+                    <div className="rounded-2xl bg-stone-50 dark:bg-[#121922] p-3.5 border border-stone-100 dark:border-slate-800">
+                      <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Bookings</p>
+                      <p className="font-black text-ink dark:text-white text-xl mt-0.5">
+                        {userBookings.length || selectedUser.bookings_count || 0}
+                      </p>
+                      <span className="text-[10px] text-slate-400">Reservations</span>
+                    </div>
+                    <div className="rounded-2xl bg-stone-50 dark:bg-[#121922] p-3.5 border border-stone-100 dark:border-slate-800">
+                      <p className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Total Spend</p>
+                      <p className="font-black text-coral text-xl mt-0.5">
+                        {formatPrice(
+                          userBookings.reduce((sum, b) => sum + (Number(b.total ?? b.total_amount ?? 0) || 0), 0) || selectedUser.total_spent || 0
+                        )}
+                      </p>
+                      <span className="text-[10px] text-slate-400">Cumulative</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Left Bottom Actions */}
+                <div className="pt-2">
+                  <button
+                    onClick={() => handleDeleteUser(selectedUser)}
+                    className="w-full rounded-2xl border border-red-300 bg-red-50 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+                  >
+                    Delete User Account
+                  </button>
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN: Bookings & Orders History (7 cols) */}
+              <div className="lg:col-span-7 rounded-2xl bg-stone-50 dark:bg-[#121922] p-4 sm:p-5 border border-stone-100 dark:border-slate-800 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-stone-200/70 dark:border-slate-800">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>🎟️</span>
+                      <span>Bookings & Orders History</span>
+                    </h4>
+                    <span className="rounded-full bg-coral/10 dark:bg-coral/20 px-2.5 py-0.5 text-xs font-black text-coral">
+                      {userBookings.length} order{userBookings.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  {loadingUserBookings ? (
+                    <div className="rounded-2xl bg-white dark:bg-[#18222e] p-8 text-center text-xs text-slate-400">
+                      Loading bookings history...
+                    </div>
+                  ) : userBookings.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-stone-200 dark:border-slate-700 bg-white/50 dark:bg-[#18222e]/50 p-8 text-center space-y-1.5 my-auto">
+                      <span className="text-3xl">🎟️</span>
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-300">No bookings recorded for this user yet.</p>
+                      <p className="text-[11px] text-slate-400">When the user books passes, their orders will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2.5 no-scrollbar pr-1">
+                      {userBookings.map((b) => {
+                        const isFreeBooking = Number(b.total ?? b.total_amount ?? 0) === 0 || b.payment_status === 'Free Entry';
+                        return (
+                          <div
+                            key={b.id || b.booking_code}
+                            className="rounded-2xl border border-stone-200/90 p-3.5 text-xs bg-white dark:border-slate-700/80 dark:bg-[#18222e] shadow-sm space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-black text-sm text-ink dark:text-white">{b.title || b.event_title || 'Experience'}</p>
+                                  {(b.event_type || b.type) && (
+                                    <span className="rounded-full bg-coral/10 dark:bg-coral/20 px-2 py-0.5 text-[10px] font-bold text-coral">
+                                      {b.event_type || b.type}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                                  📍 {b.location || 'MAXSHOW Venue'} {b.time ? `· 🕒 ${b.time}` : ''}
+                                </p>
+                                {(b.booking_date || b.created_at) && (
+                                  <p className="text-[11px] font-semibold text-coral mt-1">
+                                    📅 Booked: {formatBookingDateTime(b.booking_date || b.created_at)}
+                                  </p>
+                                )}
+                              </div>
+                              <span
+                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase whitespace-nowrap ${
+                                  isFreeBooking
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                }`}
+                              >
+                                {isFreeBooking ? 'Free Entry' : b.payment_status || 'Paid'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between border-t border-stone-100 pt-2 dark:border-slate-800 text-[11px]">
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono font-bold text-coral">#{b.booking_code || b.booking_id || `BKG-${b.id}`}</span>
+                                <span className="font-bold text-slate-600 dark:text-slate-300">
+                                  {b.tickets || b.quantity || 1} pass{b.tickets > 1 ? 'es' : ''} · {isFreeBooking ? 'Free' : formatPrice(b.total ?? b.total_amount ?? 0)}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleCancelBooking(b)}
+                                className="font-bold text-red-500 hover:text-red-700 dark:hover:text-red-400 transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Close button on bottom of right column */}
+                <div className="pt-3">
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="w-full rounded-2xl bg-ink py-2.5 text-xs sm:text-sm font-bold text-white hover:bg-slate-800 transition dark:bg-slate-700"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>

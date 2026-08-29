@@ -1427,14 +1427,14 @@ export const AdminDashboard = () => {
                       <h3 className="text-lg sm:text-xl font-black text-white leading-tight truncate">{selectedUser.name}</h3>
                       <div className="mt-1">
                         {(selectedUser.is_online || selectedUser.is_active) ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-bold text-emerald-400 ring-1 ring-emerald-500/30">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-bold text-emerald-400 ring-1 ring-emerald-500/30">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            ONLINE · Active Now
+                            Online
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-slate-300">
                             <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
-                            OFFLINE, LAST ONLINE: {formatBookingDateTime(selectedUser.last_online || selectedUser.last_active || selectedUser.created_at)}
+                            Offline
                           </span>
                         )}
                       </div>

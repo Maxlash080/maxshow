@@ -66,7 +66,7 @@ echo "[6/6] Configuring Nginx Web Server..."
 sudo bash -c 'cat > /etc/nginx/sites-available/maxshow <<EOF
 server {
     listen 80;
-    server_name _;
+    server_name maxshow.site www.maxshow.site _;
 
     client_max_body_size 20M;
 

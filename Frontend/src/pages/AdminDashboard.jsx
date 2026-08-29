@@ -1051,7 +1051,14 @@ export const AdminDashboard = () => {
                   >
                     <div>
                       <div className="relative h-48 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-                        <img src={ev.image} alt={ev.title} className="h-full w-full object-cover" />
+                        <img
+                          src={ev.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80'}
+                          alt={ev.title}
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
+                          }}
+                        />
                         <div className="absolute top-3 left-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                           {ev.type || ev.event_type || 'Event'}
                         </div>

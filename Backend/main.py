@@ -979,57 +979,6 @@ async def lifespan(_: FastAPI):
         seed_admin(db)
         seed_test_account(db)
         seed_events(db)
-
-        # Heal any missing or broken event images
-        try:
-            uploads_dir = Path(__file__).parent / "uploads"
-            seed_file = Path(__file__).parent / "seed_data.json"
-            seed_img_map = {}
-            if seed_file.exists():
-                with open(seed_file, "r", encoding="utf-8") as f:
-                    s_data = json.load(f)
-                    for ev_item in s_data.get("events", []):
-                        if ev_item.get("title") and ev_item.get("image"):
-                            seed_img_map[ev_item["title"].lower().strip()] = ev_item["image"]
-                        if ev_item.get("slug") and ev_item.get("image"):
-                            seed_img_map[ev_item["slug"].lower().strip()] = ev_item["image"]
-
-            default_fallbacks = {
-                "music": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85",
-                "comedy": "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=85",
-                "create": "https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=1200&q=85",
-                "outdoors": "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=85",
-                "food": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=85",
-                "move": "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=1200&q=85",
-                "fests": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=85",
-                "nightlife": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=85",
-                "social": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=85",
-                "default": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85",
-            }
-
-            for e in db.query(Event).all():
-                needs_heal = False
-                if not e.image:
-                    needs_heal = True
-                elif e.image.startswith("/uploads/"):
-                    fname = os.path.basename(e.image)
-                    local_f = uploads_dir / fname
-                    if not local_f.exists():
-                        needs_heal = True
-                elif e.image.startswith("http") and "bmscdn.com" in e.image:
-                    needs_heal = True
-
-                if needs_heal:
-                    replacement = seed_img_map.get(e.title.lower().strip()) or seed_img_map.get(e.slug.lower().strip())
-                    if not replacement or replacement.startswith("/uploads/") or ("bmscdn.com" in replacement):
-                        cat_key = (e.category or "").lower()
-                        replacement = default_fallbacks.get(cat_key, default_fallbacks["default"])
-                    e.image = replacement
-                    print(f"[Healed Event Image] #{e.id} {e.title} -> {e.image}")
-
-            db.commit()
-        except Exception as e:
-            print(f"Warning during event images self-healing: {e}")
     cleanup_task = asyncio.create_task(session_cleanup_loop())
     yield
     cleanup_task.cancel()

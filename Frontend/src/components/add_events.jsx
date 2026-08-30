@@ -224,7 +224,7 @@ export const AddEvents = ({
         city: selectedCity,
         location: finalLocation,
         time: `${formData.date} ${formData.clock}`,
-        price: Number(formData.price) || 0,
+        price: formData.price === '' || formData.price === null || formData.price === undefined ? 0 : Math.max(0, Number(formData.price) || 0),
         image: formData.image.trim(),
         description: formData.description.trim(),
         day: 'weekend',
@@ -400,10 +400,19 @@ export const AddEvents = ({
             <input
               type="number"
               min="0"
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: Math.max(0, Number(e.target.value) || 0) })}
+              value={formData.price === '' ? '' : formData.price}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') {
+                  setFormData({ ...formData, price: '' });
+                } else {
+                  const cleaned = val.replace(/^0+(?=\d)/, '');
+                  const num = parseInt(cleaned, 10);
+                  setFormData({ ...formData, price: isNaN(num) ? '' : Math.max(0, num) });
+                }
+              }}
               className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-              placeholder="499"
+              placeholder="0 (Free entry)"
             />
           </div>
 

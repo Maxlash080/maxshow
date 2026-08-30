@@ -1208,9 +1208,6 @@ def cleanup_inactive_sessions():
         is_online = user_online_status.get(uid, False)
         if is_online and (now - last_dt).total_seconds() >= PRESENCE_ONLINE_TIMEOUT_SECONDS:
             user_online_status[uid] = False
-            for tok, sid in list(active_sessions.items()):
-                if sid == uid:
-                    active_sessions.pop(tok, None)
             try:
                 with SessionLocal() as db:
                     u = db.get(User, uid)

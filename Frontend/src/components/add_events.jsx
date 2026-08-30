@@ -188,6 +188,7 @@ export const AddEvents = ({
 
     setFetchingUrl(true);
     try {
+      // 1. Try backend server download first
       const res = await apiRequest('/api/admin/fetch-image-url', {
         method: 'POST',
         body: JSON.stringify({ url: targetUrl }),
@@ -195,11 +196,40 @@ export const AddEvents = ({
 
       if (res && res.url) {
         setFormData((prev) => ({ ...prev, image: res.url }));
-        showToast('Web image downloaded & attached! 📸');
+        showToast('Web image downloaded & saved to server! 📸');
+        return;
       }
     } catch (err) {
-      console.warn('Could not auto-download remote image:', err.message);
-      showToast('Could not download image directly, keeping web link.');
+      console.warn('Backend image fetch failed, attempting client-side fallback:', err.message);
+    }
+
+    // 2. Client-side browser fetch/canvas fallback
+    try {
+      const response = await fetch(targetUrl, { mode: 'cors' });
+      if (response.ok) {
+        const blob = await response.blob();
+        const { dataUrl, contentType } = await compressImageFile(
+          new File([blob], 'web_image.jpg', { type: blob.type || 'image/jpeg' })
+        );
+        const base64Data = dataUrl.includes('base64,') ? dataUrl.split('base64,')[1] : dataUrl;
+
+        const uploadRes = await apiRequest('/api/admin/upload-image', {
+          method: 'POST',
+          body: JSON.stringify({
+            filename: 'web_image.jpg',
+            content_type: contentType || 'image/jpeg',
+            data: base64Data,
+          }),
+        });
+
+        if (uploadRes && uploadRes.url) {
+          setFormData((prev) => ({ ...prev, image: uploadRes.url }));
+          showToast('Web image captured & saved to server! 📸');
+          return;
+        }
+      }
+    } catch (clientErr) {
+      console.warn('Client fallback also failed:', clientErr.message);
     } finally {
       setFetchingUrl(false);
     }

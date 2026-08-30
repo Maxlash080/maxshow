@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import urllib.error
+import urllib.parse
 import urllib.request
 import shutil
 import ssl
@@ -1553,7 +1554,13 @@ def get_or_create_user_for_booking(
 
 
 def require_admin(request: Request) -> None:
-    token = request.cookies.get("maxshow_admin_session") or request.query_params.get("token") or request.query_params.get("admin_token")
+    token = (
+        request.cookies.get("maxshow_admin_session")
+        or request.headers.get("x-admin-session")
+        or request.headers.get("authorization", "").replace("Bearer ", "").strip()
+        or request.query_params.get("token")
+        or request.query_params.get("admin_token")
+    )
     if not token or not verify_admin_session_token(token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin sign-in required.")
 
@@ -2336,70 +2343,109 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
     return {"url": f"/uploads/{filename}"}
 
 
-@app.post("/api/admin/fetch-image-url")
-def fetch_remote_image(payload: FetchImageUrlRequest, request: Request) -> dict:
-    require_admin(request)
-    url = (payload.url or "").strip()
+def download_image_from_url(url_input: str) -> dict:
+    url = (url_input or "").strip()
     if not (url.startswith("http://") or url.startswith("https://")):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please provide a valid http or https image URL.")
+        raise ValueError("Please provide a valid http or https image URL.")
 
     upload_dir = BASE_DIR / "uploads"
     upload_dir.mkdir(exist_ok=True)
 
+    # 1. Unpack Search Engine / Google Wrappers
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                "Referer": "https://www.google.com/",
-            }
-        )
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
-            content_type = resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
-            data = resp.read()
+        parsed = urllib.parse.urlparse(url)
+        if "google." in parsed.netloc or "bing." in parsed.netloc or "yahoo." in parsed.netloc:
+            qs = urllib.parse.parse_qs(parsed.query)
+            if "imgurl" in qs and qs["imgurl"]:
+                url = qs["imgurl"][0]
+            elif "url" in qs and qs["url"]:
+                url = qs["url"][0]
+            elif "q" in qs and qs["q"] and qs["q"][0].startswith("http"):
+                url = qs["q"][0]
+        url = urllib.parse.unquote(url)
+    except Exception:
+        pass
 
-        if len(data) > 15 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Remote image is too large (max 15MB).")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+    }
 
-        allowed_exts = {
-            "image/jpeg": ".jpg",
-            "image/jpg": ".jpg",
-            "image/png": ".png",
-            "image/webp": ".webp",
-            "image/gif": ".gif",
-            "image/avif": ".avif",
-            "image/bmp": ".bmp",
-        }
-        ext = allowed_exts.get(content_type)
-        if not ext:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
+        content_type = resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
+        data = resp.read()
+
+    # If it's an HTML webpage, extract the real image from OpenGraph / meta tags
+    if "text/html" in content_type or data.startswith(b"<!doctype") or data.startswith(b"<html"):
+        html_text = data.decode("utf-8", errors="ignore")
+        og_match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html_text, re.I)
+        if not og_match:
+            og_match = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html_text, re.I)
+        if not og_match:
+            og_match = re.search(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']', html_text, re.I)
+        
+        if og_match:
+            real_img_url = urllib.parse.urljoin(url, og_match.group(1))
+            req2 = urllib.request.Request(real_img_url, headers=headers)
+            with urllib.request.urlopen(req2, context=ctx, timeout=15) as resp2:
+                content_type = resp2.headers.get("Content-Type", "").lower().split(";")[0].strip()
+                data = resp2.read()
+
+    if len(data) > 15 * 1024 * 1024:
+        raise ValueError("Remote image is too large (max 15MB).")
+
+    allowed_exts = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/avif": ".avif",
+        "image/bmp": ".bmp",
+        "image/x-png": ".png",
+        "image/pjpeg": ".jpg",
+    }
+    ext = allowed_exts.get(content_type)
+    if not ext:
+        if data.startswith(b"\xff\xd8\xff"):
+            ext = ".jpg"
+        elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+            ext = ".png"
+        elif data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+            ext = ".gif"
+        elif data.startswith(b"RIFF") and b"WEBP" in data[:16]:
+            ext = ".webp"
+        else:
             clean_url = url.lower().split("?")[0]
             for candidate in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]:
                 if clean_url.endswith(candidate):
                     ext = ".jpg" if candidate == ".jpeg" else candidate
                     break
-        if not ext:
-            if data.startswith(b"\xff\xd8\xff"):
-                ext = ".jpg"
-            elif data.startswith(b"\x89PNG\r\n\x1a\n"):
-                ext = ".png"
-            elif data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
-                ext = ".gif"
-            elif data.startswith(b"RIFF") and b"WEBP" in data[:16]:
-                ext = ".webp"
-            else:
-                ext = ".jpg"
+    if not ext:
+        ext = ".jpg"
 
-        filename = f"{uuid4().hex}{ext}"
-        (upload_dir / filename).write_bytes(data)
-        return {"url": f"/uploads/{filename}", "filename": filename, "original_url": url}
-    except HTTPException:
-        raise
+    filename = f"{uuid4().hex}{ext}"
+    (upload_dir / filename).write_bytes(data)
+    return {"url": f"/uploads/{filename}", "filename": filename, "bytes": len(data), "original_url": url_input}
+
+
+@app.post("/api/admin/fetch-image-url")
+def fetch_remote_image(payload: FetchImageUrlRequest, request: Request) -> dict:
+    require_admin(request)
+    try:
+        res = download_image_from_url(payload.url)
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to download image from URL: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to download image: {str(e)}")
 
 
 def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id: str = None, slug: str = "") -> str:
@@ -2413,34 +2459,13 @@ def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id:
         return f"/uploads/event_{event_id}.jpg" if event_id else "/uploads/event_1.jpg"
     image_val = image_val.strip()
 
-    upload_dir = BASE_DIR / "uploads"
-    upload_dir.mkdir(exist_ok=True)
-
     if image_val.startswith("/uploads/"):
         return image_val
 
     if image_val.startswith("http://") or image_val.startswith("https://"):
         try:
-            ext = ".jpg"
-            clean_url = image_val.lower().split("?")[0]
-            if clean_url.endswith(".png"):
-                ext = ".png"
-            elif clean_url.endswith(".webp"):
-                ext = ".webp"
-            elif clean_url.endswith(".gif"):
-                ext = ".gif"
-            elif clean_url.endswith(".jpeg"):
-                ext = ".jpeg"
-
-            filename = f"{uuid4().hex}{ext}"
-            target_path = upload_dir / filename
-            req = urllib.request.Request(
-                image_val,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                target_path.write_bytes(resp.read())
-            return f"/uploads/{filename}"
+            res = download_image_from_url(image_val)
+            return res.get("url", image_val)
         except Exception as e:
             print(f"[Image Local Store Warning] Could not cache remote image: {e}")
             return image_val

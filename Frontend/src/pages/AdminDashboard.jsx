@@ -292,12 +292,9 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
         if (elapsed >= 60 * 1000) { // 1 minute (60,000 ms)
           clearInterval(timer);
           connectingStartTimeRef.current = null;
-          showToast('Live sync timed out (more than 1 min). Logging out...');
-          try {
-            await apiRequest('/api/admin/logout', { method: 'POST' });
-          } catch (_) {}
-          await refreshAuth();
-          navigate('/admin');
+          // Fall back to offline polling mode instead of interrupting active user
+          setLiveStatus('offline');
+          setReconnecting(false);
         }
       }, 1000);
     } else {
@@ -307,7 +304,7 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [liveStatus, reconnecting, showToast, refreshAuth, navigate]);
+  }, [liveStatus, reconnecting]);
 
   // Manual or automatic refresh & reconnect live sync handler
   const handleReconnectLiveSync = async () => {

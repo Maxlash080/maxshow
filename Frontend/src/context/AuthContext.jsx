@@ -191,22 +191,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, [showToast]);
 
-  // Movement & Inactivity Detector (Auto-logs out user if no movement/interaction or tab minimized/hidden for 1 minute)
+  // Movement & Inactivity Detector (Auto-logs out user ONLY if there is NO movement/interaction for 1 minute or tab minimized for > 1 min)
   useEffect(() => {
     if (!user) return;
 
     recordActivity();
 
-    let lastThrottledTime = 0;
     const handleUserInteraction = () => {
-      // Only record activity if the tab is visible to prevent background activity simulations
-      if (document.visibilityState === 'visible') {
-        const now = Date.now();
-        if (now - lastThrottledTime > 300) {
-          lastThrottledTime = now;
-          recordActivity();
-        }
-      }
+      // Whenever the user moves mouse, scrolls, clicks, types, or interacts:
+      recordActivity();
     };
 
     const handleVisibilityChange = () => {
@@ -229,39 +222,35 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    const handlePageHide = () => {
-      // Send quick logout beacon on page unload/close if supported
-      try {
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon('/api/auth/logout');
-        }
-      } catch (_) {}
-    };
-
     const events = [
       'mousemove',
       'mousedown',
       'mouseup',
+      'click',
+      'dblclick',
+      'contextmenu',
       'keydown',
       'keyup',
       'touchstart',
       'touchmove',
       'touchend',
       'scroll',
-      'click',
       'wheel',
       'pointermove',
       'pointerdown',
+      'pointerup',
       'focus',
+      'input',
+      'change',
     ];
 
     events.forEach((evt) => {
       window.addEventListener(evt, handleUserInteraction, { passive: true });
+      document.addEventListener(evt, handleUserInteraction, { passive: true });
     });
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageHide);
 
-    // Check inactivity every second
+    // Check inactivity every second - logs out ONLY when no movement has occurred for >= 1 minute
     const inactivityInterval = setInterval(() => {
       if (!userRef.current) return;
 
@@ -294,9 +283,9 @@ export const AuthProvider = ({ children }) => {
     return () => {
       events.forEach((evt) => {
         window.removeEventListener(evt, handleUserInteraction);
+        document.removeEventListener(evt, handleUserInteraction);
       });
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
       clearInterval(inactivityInterval);
       clearInterval(heartbeatInterval);
     };

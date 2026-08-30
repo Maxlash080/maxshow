@@ -310,6 +310,8 @@
       "event_type": "Music Festival",
       "venue": "Mahalakshmi Lawns · Nagar Road",
       "time": "2026-11-28 16:00",
+      "state": "Maharashtra",
+      "city": "Pune",
       "location": "Pune, Maharashtra",
       "price": 1999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/1/13/Sean_Kuti_%26_Egypt_80_at_NH7_Weekender.jpg",
@@ -317,10 +319,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 142,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Pune"
+      "rating_count": 142
     },
     {
       "id": 2,
@@ -330,6 +329,8 @@
       "event_type": "Global Music Festival",
       "venue": "Mahalaxmi Race Course · Worli",
       "time": "2026-12-05 14:00",
+      "state": "Maharashtra",
+      "city": "Mumbai",
       "location": "Mumbai, Maharashtra",
       "price": 4999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Dreamhack_Winter_2018_Mainstage.jpg",
@@ -337,10 +338,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 230,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Mumbai"
+      "rating_count": 230
     },
     {
       "id": 3,
@@ -350,6 +348,8 @@
       "event_type": "Rock Concert",
       "venue": "NICE Grounds · Tumkur Road",
       "time": "2026-11-14 18:30",
+      "state": "Karnataka",
+      "city": "Bengaluru",
       "location": "Bengaluru, Karnataka",
       "price": 3499,
       "image": "https://upload.wikimedia.org/wikipedia/commons/9/91/The_Chainsmokers_VELD_2016_%282%29.jpg",
@@ -357,10 +357,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 185,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Karnataka",
-      "city": "Bengaluru"
+      "rating_count": 185
     },
     {
       "id": 4,
@@ -370,6 +367,8 @@
       "event_type": "Esports Tournament",
       "venue": "Bharat Mandapam · Pragati Maidan",
       "time": "2026-10-21 10:00",
+      "state": "Delhi (NCT)",
+      "city": "Delhi",
       "location": "Delhi, Delhi (NCT)",
       "price": 499,
       "image": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Dreamhack_Masters_Globen_2018_Stage.jpg",
@@ -377,10 +376,7 @@
       "category": "move",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 94,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Delhi (NCT)",
-      "city": "Delhi"
+      "rating_count": 94
     },
     {
       "id": 5,
@@ -390,6 +386,8 @@
       "event_type": "Esports & Gaming Expo",
       "venue": "KTPO Trade Centre · Whitefield",
       "time": "2026-11-06 10:00",
+      "state": "Karnataka",
+      "city": "Bengaluru",
       "location": "Bengaluru, Karnataka",
       "price": 699,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Dreamhack_Winter_2018_Mainstage.jpg",
@@ -397,10 +395,7 @@
       "category": "move",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 310,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Karnataka",
-      "city": "Bengaluru"
+      "rating_count": 310
     },
     {
       "id": 6,
@@ -410,6 +405,8 @@
       "event_type": "EDM & Dance Festival",
       "venue": "Vagator Beach Grounds · Vagator",
       "time": "2026-12-28 15:00",
+      "state": "Goa",
+      "city": "Goa",
       "location": "Goa, Goa",
       "price": 3999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Sunburnfestivalstage.JPG",
@@ -417,10 +414,7 @@
       "category": "nightlife",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 420,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Goa",
-      "city": "Goa"
+      "rating_count": 420
     },
     {
       "id": 7,
@@ -430,6 +424,8 @@
       "event_type": "Dance & Electronic Live",
       "venue": "Manpho Convention Centre · Nagavara",
       "time": "2026-12-20 17:00",
+      "state": "Karnataka",
+      "city": "Bengaluru",
       "location": "Bengaluru, Karnataka",
       "price": 2499,
       "image": "https://upload.wikimedia.org/wikipedia/commons/b/b1/The_Chainsmokers_Grandoozy_2018_%2845208197432%29.jpg",
@@ -437,10 +433,7 @@
       "category": "nightlife",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 160,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Karnataka",
-      "city": "Bengaluru"
+      "rating_count": 160
     },
     {
       "id": 8,
@@ -450,6 +443,8 @@
       "event_type": "Singing & Live Concert",
       "venue": "Jawaharlal Nehru Stadium · New Delhi",
       "time": "2026-11-22 18:30",
+      "state": "Delhi (NCT)",
+      "city": "Delhi",
       "location": "Delhi, Delhi (NCT)",
       "price": 1999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Arijit_5th_GiMA_Awards.jpg",
@@ -457,10 +452,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 5.0,
-      "rating_count": 380,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Delhi (NCT)",
-      "city": "Delhi"
+      "rating_count": 380
     },
     {
       "id": 9,
@@ -470,6 +462,8 @@
       "event_type": "Singing & Stadium Concert",
       "venue": "GMR Arena · Shamshabad",
       "time": "2026-11-15 19:00",
+      "state": "Telangana",
+      "city": "Hyderabad",
       "location": "Hyderabad, Telangana",
       "price": 2999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Meshuggah_at_NH7_Weekender_2013.jpg",
@@ -477,10 +471,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 510,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Telangana",
-      "city": "Hyderabad"
+      "rating_count": 510
     },
     {
       "id": 10,
@@ -490,6 +481,8 @@
       "event_type": "Live Singing & Symphony",
       "venue": "YMCA Grounds · Nandanam",
       "time": "2026-12-12 18:30",
+      "state": "Tamil Nadu",
+      "city": "Chennai",
       "location": "Chennai, Tamil Nadu",
       "price": 1499,
       "image": "https://upload.wikimedia.org/wikipedia/commons/9/9e/A._R._Rahman_at_Sufi_Concert_in_Dubai.jpg",
@@ -497,10 +490,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 290,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Tamil Nadu",
-      "city": "Chennai"
+      "rating_count": 290
     },
     {
       "id": 11,
@@ -510,6 +500,8 @@
       "event_type": "Rock & Singing Concert",
       "venue": "Nicco Park Amphitheatre · Salt Lake",
       "time": "2026-11-08 17:30",
+      "state": "West Bengal",
+      "city": "Kolkata",
       "location": "Kolkata, West Bengal",
       "price": 799,
       "image": "https://upload.wikimedia.org/wikipedia/commons/1/1c/Rupam_Islam_-_Kolkata_2014-02-09_8711.JPG",
@@ -517,10 +509,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 175,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "West Bengal",
-      "city": "Kolkata"
+      "rating_count": 175
     },
     {
       "id": 12,
@@ -530,6 +519,8 @@
       "event_type": "Folk Dance & Music",
       "venue": "GMDC Ground · Drive In Road",
       "time": "2026-10-10 20:00",
+      "state": "Gujarat",
+      "city": "Ahmedabad",
       "location": "Ahmedabad, Gujarat",
       "price": 599,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/e9/Navratri_garba_at_Ambaji_temple.jpg",
@@ -537,10 +528,7 @@
       "category": "nightlife",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 340,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Gujarat",
-      "city": "Ahmedabad"
+      "rating_count": 340
     },
     {
       "id": 13,
@@ -550,6 +538,8 @@
       "event_type": "Music & Cultural Fest",
       "venue": "New Shillong Highland Ground",
       "time": "2026-11-20 12:00",
+      "state": "Meghalaya",
+      "city": "Shillong",
       "location": "Shillong, Meghalaya",
       "price": 1299,
       "image": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Shillong-cherry-blossom-2023.jpg",
@@ -557,10 +547,7 @@
       "category": "fests",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 210,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Meghalaya",
-      "city": "Shillong"
+      "rating_count": 210
     },
     {
       "id": 14,
@@ -570,6 +557,8 @@
       "event_type": "Live Punjabi Singing & Hip-Hop",
       "venue": "Sector 34 Exhibition Ground",
       "time": "2026-12-07 18:30",
+      "state": "Chandigarh",
+      "city": "Chandigarh",
       "location": "Chandigarh, Chandigarh",
       "price": 1999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/1/13/Sean_Kuti_%26_Egypt_80_at_NH7_Weekender.jpg",
@@ -577,10 +566,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 190,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Chandigarh",
-      "city": "Chandigarh"
+      "rating_count": 190
     },
     {
       "id": 15,
@@ -590,6 +576,8 @@
       "event_type": "Esports Tournament",
       "venue": "Gachibowli Indoor Stadium",
       "time": "2026-10-18 11:00",
+      "state": "Telangana",
+      "city": "Hyderabad",
       "location": "Hyderabad, Telangana",
       "price": 399,
       "image": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Dreamhack_Masters_Globen_2018_Stage.jpg",
@@ -597,10 +585,7 @@
       "category": "move",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 88,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Telangana",
-      "city": "Hyderabad"
+      "rating_count": 88
     },
     {
       "id": 16,
@@ -610,6 +595,8 @@
       "event_type": "Standup Comedy",
       "venue": "Shanmukhananda Hall · Sion",
       "time": "2026-11-19 20:00",
+      "state": "Maharashtra",
+      "city": "Mumbai",
       "location": "Mumbai, Maharashtra",
       "price": 999,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/e4/Zakir_khan_2.jpg",
@@ -617,10 +604,7 @@
       "category": "comedy",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 320,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Mumbai"
+      "rating_count": 320
     },
     {
       "id": 17,
@@ -630,6 +614,8 @@
       "event_type": "Standup Comedy",
       "venue": "Talkatora Indoor Stadium",
       "time": "2026-11-29 19:30",
+      "state": "Delhi (NCT)",
+      "city": "Delhi",
       "location": "Delhi, Delhi (NCT)",
       "price": 899,
       "image": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Meshuggah_at_NH7_Weekender_2013.jpg",
@@ -637,10 +623,7 @@
       "category": "comedy",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 260,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Delhi (NCT)",
-      "city": "Delhi"
+      "rating_count": 260
     },
     {
       "id": 18,
@@ -650,6 +633,8 @@
       "event_type": "Folk Singing & Fusion",
       "venue": "Hotel Clarks Amer · Jawahar Lal Nehru Marg",
       "time": "2026-12-18 19:00",
+      "state": "Rajasthan",
+      "city": "Jaipur",
       "location": "Jaipur, Rajasthan",
       "price": 699,
       "image": "https://upload.wikimedia.org/wikipedia/commons/1/13/Sean_Kuti_%26_Egypt_80_at_NH7_Weekender.jpg",
@@ -657,10 +642,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.7,
-      "rating_count": 112,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Rajasthan",
-      "city": "Jaipur"
+      "rating_count": 112
     },
     {
       "id": 19,
@@ -670,6 +652,8 @@
       "event_type": "Fusion Rock & Singing",
       "venue": "Bolgatty Palace Event Grounds",
       "time": "2026-11-12 18:00",
+      "state": "Kerala",
+      "city": "Kochi",
       "location": "Kochi, Kerala",
       "price": 899,
       "image": "https://upload.wikimedia.org/wikipedia/commons/8/8b/Thaikkudam_Bridge_Goa.jpg",
@@ -677,10 +661,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 150,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Kerala",
-      "city": "Kochi"
+      "rating_count": 150
     },
     {
       "id": 20,
@@ -690,6 +671,8 @@
       "event_type": "Esports Championship",
       "venue": "Jawaharlal Nehru Indoor Stadium",
       "time": "2026-11-21 10:30",
+      "state": "Tamil Nadu",
+      "city": "Chennai",
       "location": "Chennai, Tamil Nadu",
       "price": 349,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Dreamhack_Winter_2018_Mainstage.jpg",
@@ -697,10 +680,7 @@
       "category": "move",
       "day": "weekend",
       "rating": 4.7,
-      "rating_count": 78,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Tamil Nadu",
-      "city": "Chennai"
+      "rating_count": 78
     },
     {
       "id": 21,
@@ -710,6 +690,8 @@
       "event_type": "Acoustic Singing & Indie",
       "venue": "Narayani Heights · Gandhinagar Road",
       "time": "2026-12-04 19:30",
+      "state": "Gujarat",
+      "city": "Ahmedabad",
       "location": "Ahmedabad, Gujarat",
       "price": 1299,
       "image": "https://upload.wikimedia.org/wikipedia/commons/1/13/Sean_Kuti_%26_Egypt_80_at_NH7_Weekender.jpg",
@@ -717,10 +699,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 140,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Gujarat",
-      "city": "Ahmedabad"
+      "rating_count": 140
     },
     {
       "id": 22,
@@ -730,6 +709,8 @@
       "event_type": "Standup Comedy",
       "venue": "Chowdiah Memorial Hall · Malleshwaram",
       "time": "2026-11-27 20:00",
+      "state": "Karnataka",
+      "city": "Bengaluru",
       "location": "Bengaluru, Karnataka",
       "price": 1199,
       "image": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Meshuggah_at_NH7_Weekender_2013.jpg",
@@ -737,10 +718,7 @@
       "category": "comedy",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 220,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Karnataka",
-      "city": "Bengaluru"
+      "rating_count": 220
     },
     {
       "id": 23,
@@ -750,6 +728,8 @@
       "event_type": "Pop Culture & Gaming Fest",
       "venue": "Jio World Convention Centre · BKC",
       "time": "2026-12-19 11:00",
+      "state": "Maharashtra",
+      "city": "Mumbai",
       "location": "Mumbai, Maharashtra",
       "price": 899,
       "image": "https://upload.wikimedia.org/wikipedia/commons/1/16/Bengaluru_comic_con.png",
@@ -757,10 +737,7 @@
       "category": "fests",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 350,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Mumbai"
+      "rating_count": 350
     },
     {
       "id": 24,
@@ -770,6 +747,8 @@
       "event_type": "Standup Comedy",
       "venue": "Bal Gandharva Ranga Mandir · JM Road",
       "time": "2026-11-14 20:30",
+      "state": "Maharashtra",
+      "city": "Pune",
       "location": "Pune, Maharashtra",
       "price": 799,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/e4/Zakir_khan_2.jpg",
@@ -777,10 +756,7 @@
       "category": "comedy",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 280,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Pune"
+      "rating_count": 280
     },
     {
       "id": 25,
@@ -790,6 +766,8 @@
       "event_type": "Nightlife & Electronic Dance",
       "venue": "Dome SVP Stadium · Worli",
       "time": "2026-11-21 21:00",
+      "state": "Maharashtra",
+      "city": "Mumbai",
       "location": "Mumbai, Maharashtra",
       "price": 1799,
       "image": "https://upload.wikimedia.org/wikipedia/commons/b/b1/The_Chainsmokers_Grandoozy_2018_%2845208197432%29.jpg",
@@ -797,10 +775,7 @@
       "category": "nightlife",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 195,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Mumbai"
+      "rating_count": 195
     },
     {
       "id": 26,
@@ -810,6 +785,8 @@
       "event_type": "Food & Music Festival",
       "venue": "Royal Palms · Koregaon Park Annexe",
       "time": "2026-11-21 15:00",
+      "state": "Maharashtra",
+      "city": "Pune",
       "location": "Pune, Maharashtra",
       "price": 499,
       "image": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Meshuggah_at_NH7_Weekender_2013.jpg",
@@ -817,10 +794,7 @@
       "category": "food",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 160,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Pune"
+      "rating_count": 160
     },
     {
       "id": 27,
@@ -830,6 +804,8 @@
       "event_type": "High-Tech Minimal Dance",
       "venue": "Mahalakshmi Lawns · Nagar Road",
       "time": "2026-12-12 17:30",
+      "state": "Maharashtra",
+      "city": "Pune",
       "location": "Pune, Maharashtra",
       "price": 2199,
       "image": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Kappa_Futur_Festival_2025_-_Esibizione_di_Boris_Brejcha.jpg",
@@ -837,10 +813,7 @@
       "category": "nightlife",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 210,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Maharashtra",
-      "city": "Pune"
+      "rating_count": 210
     },
     {
       "id": 28,
@@ -850,6 +823,8 @@
       "event_type": "Beach Music & Cultural Fest",
       "venue": "Riva Beach Resort · Mandrem",
       "time": "2026-11-29 14:00",
+      "state": "Goa",
+      "city": "Goa",
       "location": "Goa, Goa",
       "price": 1499,
       "image": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Sunburnfestivalstage.JPG",
@@ -857,10 +832,7 @@
       "category": "fests",
       "day": "weekend",
       "rating": 4.9,
-      "rating_count": 175,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Goa",
-      "city": "Goa"
+      "rating_count": 175
     },
     {
       "id": 29,
@@ -870,6 +842,8 @@
       "event_type": "Live Jazz & Soul Concert",
       "venue": "Nehru Park Amphitheatre · Chanakyapuri",
       "time": "2026-12-06 18:00",
+      "state": "Delhi (NCT)",
+      "city": "Delhi",
       "location": "Delhi, Delhi (NCT)",
       "price": 799,
       "image": "https://upload.wikimedia.org/wikipedia/commons/9/9e/A._R._Rahman_at_Sufi_Concert_in_Dubai.jpg",
@@ -877,10 +851,7 @@
       "category": "music",
       "day": "weekend",
       "rating": 4.8,
-      "rating_count": 130,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Delhi (NCT)",
-      "city": "Delhi"
+      "rating_count": 130
     },
     {
       "id": 30,
@@ -890,6 +861,8 @@
       "event_type": "Food & Drinks Festival",
       "venue": "HITEX Exhibition Centre · Hitec City",
       "time": "2026-11-28 13:00",
+      "state": "Telangana",
+      "city": "Hyderabad",
       "location": "Hyderabad, Telangana",
       "price": 699,
       "image": "https://upload.wikimedia.org/wikipedia/commons/e/e9/Navratri_garba_at_Ambaji_temple.jpg",
@@ -897,10 +870,7 @@
       "category": "food",
       "day": "weekend",
       "rating": 4.7,
-      "rating_count": 145,
-      "created_at": "2026-08-23 14:17:16.000000",
-      "state": "Telangana",
-      "city": "Hyderabad"
+      "rating_count": 145
     }
   ],
   "bookings": [

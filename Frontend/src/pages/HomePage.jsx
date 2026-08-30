@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { HeroShowcase } from '../components/HeroShowcase';
@@ -46,6 +46,7 @@ const getStoredEvents = () => {
 
 export const HomePage = () => {
   const navigate = useNavigate();
+  const locationPicksRef = useRef(null);
   const [events, setEvents] = useState(getStoredEvents);
   const [currentLocation, setCurrentLocation] = useState('Hinjawadi');
   const [activeQuickFilter, setActiveQuickFilter] = useState('all');
@@ -246,33 +247,82 @@ export const HomePage = () => {
 
   // Filtered Events for "Location Picks" section
   const locationPicks = useMemo(() => {
-    const clean = (currentLocation || '').toLowerCase().trim();
+    if (!events || events.length === 0) return [];
+
     const { city: selCity, area: selArea } = parseLocationCityAndArea(currentLocation);
     const targetArea = (selArea || '').toLowerCase().trim();
     const targetCity = (selCity || '').toLowerCase().trim();
+    const cleanCurrent = (currentLocation || '').toLowerCase().trim();
 
-    let matched = events.filter((e) => {
+    // 1. Direct location matches
+    const directMatches = events.filter((e) => {
       const loc = (e.location || '').toLowerCase();
       const ven = (e.venue || '').toLowerCase();
-      const tit = (e.title || '').toLowerCase();
-      if (targetArea && (loc.includes(targetArea) || ven.includes(targetArea))) return true;
-      if (targetCity && loc.includes(targetCity)) return true;
-      return loc.includes(clean) || ven.includes(clean) || tit.includes(clean);
-    });
+      const { city: evCity, area: evArea } = parseLocationCityAndArea(e.location || '');
+      const cleanEvArea = (evArea || '').toLowerCase().trim();
+      const cleanEvCity = (evCity || '').toLowerCase().trim();
 
-    if (matched.length < 3) {
-      const seen = new Set(matched.map((e) => e.slug || e.id || e.title));
-      for (const e of events) {
-        const key = e.slug || e.id || e.title;
-        if (!seen.has(key)) {
-          matched.push(e);
-          seen.add(key);
-          if (matched.length >= 3) break;
+      if (targetArea) {
+        if (cleanEvArea && (cleanEvArea === targetArea || cleanEvArea.includes(targetArea) || targetArea.includes(cleanEvArea))) {
+          return true;
+        }
+        if (loc.includes(targetArea) || ven.includes(targetArea)) {
+          return true;
+        }
+        return false;
+      }
+
+      if (targetCity) {
+        if (cleanEvCity && (cleanEvCity === targetCity || cleanEvCity.includes(targetCity) || targetCity.includes(cleanEvCity))) {
+          return true;
+        }
+        if (loc.includes(targetCity) || ven.includes(targetCity)) {
+          return true;
         }
       }
+
+      return loc.includes(cleanCurrent) || ven.includes(cleanCurrent);
+    });
+
+    // 2. If 3 or more events match this location, show all matching events (for slider/carousel)
+    if (directMatches.length >= 3) {
+      return directMatches;
     }
-    return matched.slice(0, 3);
+
+    // 3. If fewer than 3 events match (1 or 2 matches), keep matching events first and fill remainder randomly
+    const matchedKeys = new Set(directMatches.map((e) => e.slug || e.id || e.title));
+    const otherEvents = events.filter((e) => !matchedKeys.has(e.slug || e.id || e.title));
+
+    // Stable deterministic pseudo-shuffle based on event ID / title so cards don't flicker uncontrollably on re-renders
+    const sortedOthers = [...otherEvents].sort((a, b) => {
+      const valA = ((Number(a.id) || 0) * 17) % 31;
+      const valB = ((Number(b.id) || 0) * 17) % 31;
+      return valA - valB;
+    });
+
+    const result = [...directMatches];
+    for (const other of sortedOthers) {
+      if (result.length >= 3) break;
+      result.push(other);
+    }
+    return result;
   }, [events, currentLocation]);
+
+  const scrollPicksLeft = () => {
+    if (locationPicksRef.current) {
+      const card = locationPicksRef.current.querySelector('article');
+      const step = card ? card.offsetWidth + 24 : 360;
+      locationPicksRef.current.scrollBy({ left: -step, behavior: 'smooth' });
+    }
+  };
+
+  const scrollPicksRight = () => {
+    if (locationPicksRef.current) {
+      const card = locationPicksRef.current.querySelector('article');
+      const step = card ? card.offsetWidth + 24 : 360;
+      locationPicksRef.current.scrollBy({ left: step, behavior: 'smooth' });
+    }
+  };
 
   // Filtered Events for Discovery Grid
   const filteredEvents = useMemo(() => {
@@ -448,12 +498,45 @@ export const HomePage = () => {
                   Top picks in {currentLocation}
                 </h2>
               </div>
-              <p className="text-sm font-semibold text-slate-400">
-                Curated happenings around {currentLocation}
-              </p>
+              <div className="flex items-center justify-between sm:justify-end gap-4">
+                <p className="text-sm font-semibold text-slate-400 hidden sm:block">
+                  Curated happenings around {currentLocation}
+                </p>
+                {locationPicks.length > 3 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={scrollPicksLeft}
+                      type="button"
+                      aria-label="Previous events"
+                      className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-coral hover:text-white transition shadow-sm active:scale-95 cursor-pointer backdrop-blur-md border border-white/10"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={scrollPicksRight}
+                      type="button"
+                      aria-label="Next events"
+                      className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-coral hover:text-white transition shadow-sm active:scale-95 cursor-pointer backdrop-blur-md border border-white/10"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              ref={locationPicksRef}
+              className={
+                locationPicks.length > 3
+                  ? "flex gap-6 overflow-x-auto scroll-smooth no-scrollbar pb-2 snap-x snap-mandatory"
+                  : "grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+              }
+            >
               {locationPicks.map((pick) => {
                 const slug = pick.slug || pick.id;
                 const time = formatEventTime(pick.time || '', pick.day);
@@ -463,7 +546,11 @@ export const HomePage = () => {
                   <article
                     key={slug}
                     onClick={() => navigate(`/event/${encodeURIComponent(slug)}`)}
-                    className="cursor-pointer group overflow-hidden rounded-3xl bg-white text-ink dark:bg-[#1c2733] dark:text-white dark:border-slate-700 shadow-soft transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl border border-stone-200/80"
+                    className={`cursor-pointer group overflow-hidden rounded-3xl bg-white text-ink dark:bg-[#1c2733] dark:text-white dark:border-slate-700 shadow-soft transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl border border-stone-200/80 ${
+                      locationPicks.length > 3
+                        ? 'flex-none w-[85%] sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] snap-start'
+                        : ''
+                    }`}
                   >
                     <div className="relative h-52 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
                       <img

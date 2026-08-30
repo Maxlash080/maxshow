@@ -9,6 +9,7 @@ import secrets
 import urllib.error
 import urllib.request
 import shutil
+import ssl
 from datetime import datetime
 from uuid import uuid4
 from contextlib import asynccontextmanager
@@ -849,6 +850,10 @@ class ImageUploadRequest(BaseModel):
     filename: str | None = Field(default=None, max_length=255)
     content_type: str = Field(default="image/jpeg", max_length=100)
     data: str = Field(min_length=1)
+
+
+class FetchImageUrlRequest(BaseModel):
+    url: str = Field(min_length=5, max_length=2000)
 
 
 class EventRequest(BaseModel):
@@ -2329,6 +2334,72 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
     filename = f"{uuid4().hex}{extension}"
     (upload_dir / filename).write_bytes(contents)
     return {"url": f"/uploads/{filename}"}
+
+
+@app.post("/api/admin/fetch-image-url")
+def fetch_remote_image(payload: FetchImageUrlRequest, request: Request) -> dict:
+    require_admin(request)
+    url = (payload.url or "").strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please provide a valid http or https image URL.")
+
+    upload_dir = BASE_DIR / "uploads"
+    upload_dir.mkdir(exist_ok=True)
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": "https://www.google.com/",
+            }
+        )
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
+            content_type = resp.headers.get("Content-Type", "").lower().split(";")[0].strip()
+            data = resp.read()
+
+        if len(data) > 15 * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Remote image is too large (max 15MB).")
+
+        allowed_exts = {
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
+            "image/avif": ".avif",
+            "image/bmp": ".bmp",
+        }
+        ext = allowed_exts.get(content_type)
+        if not ext:
+            clean_url = url.lower().split("?")[0]
+            for candidate in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]:
+                if clean_url.endswith(candidate):
+                    ext = ".jpg" if candidate == ".jpeg" else candidate
+                    break
+        if not ext:
+            if data.startswith(b"\xff\xd8\xff"):
+                ext = ".jpg"
+            elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+                ext = ".png"
+            elif data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+                ext = ".gif"
+            elif data.startswith(b"RIFF") and b"WEBP" in data[:16]:
+                ext = ".webp"
+            else:
+                ext = ".jpg"
+
+        filename = f"{uuid4().hex}{ext}"
+        (upload_dir / filename).write_bytes(data)
+        return {"url": f"/uploads/{filename}", "filename": filename, "original_url": url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to download image from URL: {str(e)}")
 
 
 def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id: str = None, slug: str = "") -> str:

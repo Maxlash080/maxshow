@@ -73,6 +73,7 @@ export const AddEvents = ({
   const { showToast } = useToast();
   const fileInputRef = useRef(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [fetchingUrl, setFetchingUrl] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
 
   useLockBodyScroll(isOpen);
@@ -175,6 +176,35 @@ export const AddEvents = ({
     }
   };
 
+  // Handle Download from Web Image URL
+  const handleFetchImageUrl = async (rawUrl) => {
+    const targetUrl = (rawUrl || '').trim();
+    if (!targetUrl || targetUrl.startsWith('/uploads/') || targetUrl.startsWith('data:')) {
+      return;
+    }
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      return;
+    }
+
+    setFetchingUrl(true);
+    try {
+      const res = await apiRequest('/api/admin/fetch-image-url', {
+        method: 'POST',
+        body: JSON.stringify({ url: targetUrl }),
+      });
+
+      if (res && res.url) {
+        setFormData((prev) => ({ ...prev, image: res.url }));
+        showToast('Web image downloaded & attached! 📸');
+      }
+    } catch (err) {
+      console.warn('Could not auto-download remote image:', err.message);
+      showToast('Could not download image directly, keeping web link.');
+    } finally {
+      setFetchingUrl(false);
+    }
+  };
+
   // Submit / Save Event
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -213,6 +243,20 @@ export const AddEvents = ({
         formatLocationString(selectedCity, selectedState)
       ).trim();
 
+      let finalImage = (formData.image || '').trim();
+      if ((finalImage.startsWith('http://') || finalImage.startsWith('https://')) && !finalImage.startsWith('/uploads/')) {
+        try {
+          const res = await apiRequest('/api/admin/fetch-image-url', {
+            method: 'POST',
+            body: JSON.stringify({ url: finalImage }),
+          });
+          if (res && res.url) {
+            finalImage = res.url;
+            setFormData((prev) => ({ ...prev, image: res.url }));
+          }
+        } catch (_) {}
+      }
+
       const payload = {
         title: cleanTitle,
         slug: rawSlug || `event-${Date.now().toString(36)}`,
@@ -225,7 +269,7 @@ export const AddEvents = ({
         location: finalLocation,
         time: `${formData.date} ${formData.clock}`,
         price: formData.price === '' || formData.price === null || formData.price === undefined ? 0 : Math.max(0, Number(formData.price) || 0),
-        image: formData.image.trim(),
+        image: finalImage,
         description: formData.description.trim(),
         day: 'weekend',
       };
@@ -420,9 +464,11 @@ export const AddEvents = ({
           <div className="sm:col-span-2 space-y-2">
             <div className="flex items-center justify-between">
               <label className="block font-bold text-ink dark:text-slate-200">Event Cover Image *</label>
-              {uploadingImage && (
-                <span className="text-xs font-bold text-coral animate-pulse">Uploading image... 📸</span>
-              )}
+              {uploadingImage ? (
+                <span className="text-xs font-bold text-coral animate-pulse">Compressing & Uploading image... 📸</span>
+              ) : fetchingUrl ? (
+                <span className="text-xs font-bold text-coral animate-pulse">Downloading image from web... 🌐⏳</span>
+              ) : null}
             </div>
 
             {/* Preview Banner or Dropzone */}
@@ -460,9 +506,9 @@ export const AddEvents = ({
               >
                 <span className="text-3xl">📷</span>
                 <p className="mt-2 text-xs sm:text-sm font-bold text-ink dark:text-white">
-                  {uploadingImage ? 'Uploading photo...' : 'Click to choose event image from your device'}
+                  {uploadingImage ? 'Uploading photo...' : fetchingUrl ? 'Downloading image from web...' : 'Click to choose event image from your device'}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Supports JPG, PNG, WEBP, GIF, AVIF (auto-optimized)</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Supports JPG, PNG, WEBP, GIF, AVIF or paste any web link below</p>
               </div>
             )}
 
@@ -475,22 +521,55 @@ export const AddEvents = ({
             />
 
             {/* Upload Action or URL Paste */}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingImage}
+                disabled={uploadingImage || fetchingUrl}
                 className="rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 disabled:opacity-50 shrink-0 cursor-pointer"
               >
                 {uploadingImage ? 'Uploading...' : '📁 Upload from Device'}
               </button>
-              <input
-                type="text"
-                value={formData.image}
-                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                placeholder="https://images.unsplash.com/..."
-                className="flex-1 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-              />
+              <div className="relative flex-1 flex items-center">
+                <input
+                  type="text"
+                  value={formData.image}
+                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData('text')?.trim();
+                    if (pasted && (pasted.startsWith('http://') || pasted.startsWith('https://'))) {
+                      setFormData((prev) => ({ ...prev, image: pasted }));
+                      setTimeout(() => handleFetchImageUrl(pasted), 80);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (formData.image.startsWith('http://') || formData.image.startsWith('https://')) {
+                      handleFetchImageUrl(formData.image);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (formData.image.startsWith('http://') || formData.image.startsWith('https://')) {
+                        handleFetchImageUrl(formData.image);
+                      }
+                    }
+                  }}
+                  placeholder="Paste any image link from internet (https://...)"
+                  className="w-full rounded-xl border border-stone-300 pl-3.5 pr-20 py-2 text-xs font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                />
+                {Boolean(formData.image && (formData.image.startsWith('http://') || formData.image.startsWith('https://')) && !formData.image.startsWith('/uploads/')) && (
+                  <button
+                    type="button"
+                    onClick={() => handleFetchImageUrl(formData.image)}
+                    disabled={fetchingUrl}
+                    className="absolute right-1.5 rounded-lg bg-coral px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:brightness-110 transition disabled:opacity-50 cursor-pointer"
+                    title="Download and save this web image to server"
+                  >
+                    {fetchingUrl ? '⏳' : '⬇️ Attach'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

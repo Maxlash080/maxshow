@@ -86,20 +86,23 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setIsAdmin(currentAdmin);
         setUserRatings({});
+        setBookmarkedIds([]);
+        setStoredBookmarks([]);
       }
     } catch (_) {
       setUser(null);
       setIsAdmin(currentAdmin);
       setUserRatings({});
+      setBookmarkedIds([]);
+      setStoredBookmarks([]);
     }
 
     try {
       const state = await apiRequest('/api/user/state');
-      if (state) {
+      if (state && userRef.current) {
         if (Array.isArray(state.bookmarked_event_ids)) {
-          const combined = Array.from(new Set([...getStoredBookmarks(), ...state.bookmarked_event_ids]));
-          setBookmarkedIds(combined);
-          setStoredBookmarks(combined);
+          setBookmarkedIds(state.bookmarked_event_ids);
+          setStoredBookmarks(state.bookmarked_event_ids);
         }
         const ratingsMap = {};
         if (state.user_ratings && typeof state.user_ratings === 'object') {
@@ -121,14 +124,21 @@ export const AuthProvider = ({ children }) => {
 
   const toggleBookmark = useCallback(async (eventId, eventSlug) => {
     recordActivity();
-    if (!eventId && !eventSlug) return;
+    if (!eventId && !eventSlug) return false;
+
+    // Strictly verify if user is logged in
+    if (!userRef.current) {
+      showToast('Please sign in to bookmark events.');
+      return false;
+    }
+
     const targetId = eventId && !isNaN(Number(eventId)) ? Number(eventId) : null;
     const targetSlug = eventSlug ? String(eventSlug).trim() : null;
 
     let stored = getStoredBookmarks();
     const isCurrentlyIn = (targetId && stored.includes(targetId)) || (targetSlug && stored.includes(targetSlug));
 
-    // Optimistic toggle
+    // Optimistic toggle only for logged-in users
     let newStored;
     if (isCurrentlyIn) {
       newStored = stored.filter((x) => x !== targetId && x !== targetSlug);
@@ -166,11 +176,13 @@ export const AuthProvider = ({ children }) => {
           setBookmarkedIds([...newStored]);
         }
       }
+      return true;
     } catch (err) {
-      const errMsg = err.message ? err.message.toLowerCase() : '';
-      if (errMsg.includes('sign in') || errMsg.includes('authenticated') || errMsg.includes('unauthorized') || errMsg.includes('401')) {
-        showToast(isCurrentlyIn ? 'Removed from bookmarks.' : 'Bookmarked! Sign in to sync with your account 🔖');
-      }
+      // Revert on error
+      setStoredBookmarks(stored);
+      setBookmarkedIds(stored);
+      showToast(err.message || 'Failed to update bookmark');
+      return false;
     }
   }, [showToast, recordActivity]);
 
@@ -184,6 +196,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAdmin(false);
     setUserRatings({});
+    setBookmarkedIds([]);
+    setStoredBookmarks([]);
     if (isAutoLogout) {
       showToast('You have been logged out due to 1 minute of inactivity.');
     } else {

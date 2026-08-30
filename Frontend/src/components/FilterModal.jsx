@@ -20,21 +20,29 @@ const GENRE_OPTIONS = [
   'Fitness & Yoga',
 ];
 
-export const FilterModal = ({ isOpen, onClose, filters, onApply }) => {
+export const FilterModal = ({ isOpen = true, onClose, filters = {}, onApply, onApplyFilters }) => {
   const [activeTab, setActiveTab] = useState('sort'); // 'sort' | 'genre'
   const [tempSort, setTempSort] = useState(filters.sort || 'popularity');
   const [tempGenre, setTempGenre] = useState(filters.genre || 'All Genres');
 
-  useLockBodyScroll(isOpen);
+  useLockBodyScroll(Boolean(isOpen));
 
   if (!isOpen) return null;
 
   const handleApply = () => {
-    onApply({
+    const updated = {
       sort: tempSort,
       genre: tempGenre,
-    });
-    onClose();
+    };
+    if (typeof onApply === 'function') {
+      onApply(updated);
+    }
+    if (typeof onApplyFilters === 'function') {
+      onApplyFilters(updated);
+    }
+    if (typeof onClose === 'function') {
+      onClose();
+    }
   };
 
   const handleClear = () => {

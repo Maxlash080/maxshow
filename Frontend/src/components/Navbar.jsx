@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LocationPicker } from './LocationPicker';
 
 export const Navbar = ({ currentLocation, onLocationChange, availableLocations }) => {
   const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const initial = user?.name?.trim()?.charAt(0)?.toUpperCase() || 'U';
@@ -15,6 +16,26 @@ export const Navbar = ({ currentLocation, onLocationChange, availableLocations }
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
+  };
+
+  const handleScrollTo = (e, sectionId) => {
+    e.preventDefault();
+    setMobileMenuOpen(false);
+
+    if (location.pathname !== '/' && location.pathname !== '/index.html') {
+      navigate(`/#${sectionId}`);
+      setTimeout(() => {
+        const el = document.getElementById(sectionId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 250);
+    } else {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
   };
 
   return (
@@ -47,19 +68,21 @@ export const Navbar = ({ currentLocation, onLocationChange, availableLocations }
             All events
           </Link>
 
-          <a
-            href="/#location-picks"
-            className="text-ink dark:text-white hover:text-coral dark:hover:text-coral transition-colors duration-150"
+          <button
+            type="button"
+            onClick={(e) => handleScrollTo(e, 'city-picks')}
+            className="text-ink dark:text-white hover:text-coral dark:hover:text-coral transition-colors duration-150 cursor-pointer font-bold"
           >
             City picks
-          </a>
+          </button>
 
-          <a
-            href="/#categories"
-            className="text-ink dark:text-white hover:text-coral dark:hover:text-coral transition-colors duration-150"
+          <button
+            type="button"
+            onClick={(e) => handleScrollTo(e, 'categories')}
+            className="text-ink dark:text-white hover:text-coral dark:hover:text-coral transition-colors duration-150 cursor-pointer font-bold"
           >
             Categories
-          </a>
+          </button>
 
           <Link
             to="/about"
@@ -143,6 +166,16 @@ export const Navbar = ({ currentLocation, onLocationChange, availableLocations }
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-stone-200/70 dark:border-white/[0.08] bg-white/95 dark:bg-[#101820]/95 backdrop-blur-xl px-4 py-4 space-y-3 animate-in slide-in-from-top-2 duration-150">
+          {onLocationChange && (
+            <div className="pb-2 border-b border-stone-100 dark:border-white/5 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Current Location</span>
+              <LocationPicker
+                currentLocation={currentLocation}
+                onLocationChange={onLocationChange}
+                availableLocations={availableLocations}
+              />
+            </div>
+          )}
           <nav className="flex flex-col space-y-1">
             <Link
               to="/all-events"
@@ -156,22 +189,22 @@ export const Navbar = ({ currentLocation, onLocationChange, availableLocations }
               <span>All events</span>
               <span className="text-xs text-slate-400">→</span>
             </Link>
-            <a
-              href="/#location-picks"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-white/5 transition"
+            <button
+              type="button"
+              onClick={(e) => handleScrollTo(e, 'city-picks')}
+              className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-white/5 transition text-left cursor-pointer w-full"
             >
               <span>City picks</span>
               <span className="text-xs text-slate-400">→</span>
-            </a>
-            <a
-              href="/#categories"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-white/5 transition"
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleScrollTo(e, 'categories')}
+              className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-stone-50 dark:hover:bg-white/5 transition text-left cursor-pointer w-full"
             >
               <span>Categories</span>
               <span className="text-xs text-slate-400">→</span>
-            </a>
+            </button>
             <Link
               to="/about"
               onClick={() => setMobileMenuOpen(false)}

@@ -62,9 +62,7 @@ export const HeroShowcase = ({ events = [] }) => {
 
   const badgeText = currentEvent.day === 'today' ? 'TONIGHT' : (currentEvent.type || currentEvent.event_type || 'FEATURED').toUpperCase();
   const timeFormatted = formatEventTime(currentEvent.time || '', currentEvent.day);
-  // Filter out "Pune" from location fallback
-  const rawLocation = currentEvent.location ? currentEvent.location.split(',')[0].trim() : (currentEvent.venue ? currentEvent.venue.split('·')[0].trim() : 'Hinjawadi');
-  const locationText = rawLocation.toLowerCase() === 'pune' ? 'Hinjawadi' : rawLocation;
+  const locationText = currentEvent.location || (currentEvent.venue ? currentEvent.venue.split('·')[0].trim() : 'India');
   const priceText = formatPrice(currentEvent.price);
 
   return (

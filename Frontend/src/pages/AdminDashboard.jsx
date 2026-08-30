@@ -8,11 +8,12 @@ import { formatPrice, formatEventTime, formatBookingDate, formatBookingDateTime,
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { LocationFilterDropdown } from '../components/LocationFilterDropdown';
+import { AddEvents } from '../components/add_events';
+import { StateDropdown } from '../components/StateDropdown';
 import { CityDropdown } from '../components/CityDropdown';
-import { AreaDropdown } from '../components/AreaDropdown';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { CustomTimePicker } from '../components/CustomTimePicker';
-import { LOCATIONS, getAreasForCity, parseLocationCityAndArea, formatLocationString } from '../utils/constants';
+import { INDIAN_STATES, getCitiesForState, parseLocationStateAndCity, formatLocationString } from '../utils/constants';
 
 const getCachedAdminData = () => {
   try {
@@ -121,7 +122,9 @@ export const AdminDashboard = () => {
     type: 'Live music',
     category: 'music',
     venue: '',
-    location: '',
+    state: 'Maharashtra',
+    city: 'Pune',
+    location: 'Pune, Maharashtra',
     date: '',
     clock: '20:00',
     price: 499,
@@ -693,9 +696,9 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
       type: 'Live music',
       category: 'music',
       venue: '',
+      state: 'Maharashtra',
       city: 'Pune',
-      area: 'Hinjawadi',
-      location: 'Hinjawadi, Pune',
+      location: 'Pune, Maharashtra',
       date: new Date().toISOString().split('T')[0],
       clock: '20:00',
       price: 499,
@@ -707,16 +710,16 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
 
   const handleOpenEditEvent = (ev) => {
     setEditingEvent(ev);
-    const locParsed = parseLocationCityAndArea(ev.location || 'Hinjawadi, Pune');
+    const locParsed = parseLocationStateAndCity(ev.location || 'Pune, Maharashtra');
     setEventFormData({
       title: ev.title || '',
       slug: ev.slug || '',
       type: ev.type || ev.event_type || 'Live music',
       category: ev.category || 'music',
       venue: ev.venue || '',
-      city: locParsed.city,
-      area: locParsed.area,
-      location: ev.location || formatLocationString(locParsed.area, locParsed.city),
+      state: ev.state || locParsed.state,
+      city: ev.city || locParsed.city,
+      location: ev.location || formatLocationString(ev.city || locParsed.city, ev.state || locParsed.state),
       date: ev.date || (ev.time?.split(' ')[0] || new Date().toISOString().split('T')[0]),
       clock: ev.clock || (ev.time?.split(' ')[1] || '20:00'),
       price: ev.price !== undefined ? ev.price : 499,
@@ -728,16 +731,16 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
 
   const handleDuplicateEvent = (ev) => {
     setEditingEvent(null);
-    const locParsed = parseLocationCityAndArea(ev.location || 'Hinjawadi, Pune');
+    const locParsed = parseLocationStateAndCity(ev.location || 'Pune, Maharashtra');
     setEventFormData({
       title: `${ev.title || 'Event'} (Copy)`,
       slug: '',
       type: ev.type || ev.event_type || 'Live music',
       category: ev.category || 'music',
       venue: ev.venue || '',
-      city: locParsed.city,
-      area: locParsed.area,
-      location: ev.location || formatLocationString(locParsed.area, locParsed.city),
+      state: ev.state || locParsed.state,
+      city: ev.city || locParsed.city,
+      location: ev.location || formatLocationString(ev.city || locParsed.city, ev.state || locParsed.state),
       date: ev.date || (ev.time?.split(' ')[0] || new Date().toISOString().split('T')[0]),
       clock: ev.clock || (ev.time?.split(' ')[1] || '20:00'),
       price: ev.price !== undefined ? ev.price : 499,
@@ -781,9 +784,11 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
       const generatedSlug = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const rawSlug = eventFormData.slug.trim() ? eventFormData.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : generatedSlug;
 
+      const selectedState = eventFormData.state || 'Maharashtra';
+      const selectedCity = eventFormData.city || 'Pune';
       const finalLocation = (
         eventFormData.location ||
-        formatLocationString(eventFormData.area || 'Hinjawadi', eventFormData.city || 'Pune')
+        formatLocationString(selectedCity, selectedState)
       ).trim();
 
       const payload = {
@@ -793,6 +798,8 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
         event_type: eventFormData.type,
         category: eventFormData.category,
         venue: eventFormData.venue.trim(),
+        state: selectedState,
+        city: selectedCity,
         location: finalLocation,
         time: `${eventFormData.date} ${eventFormData.clock}`,
         price: Number(eventFormData.price) || 0,
@@ -893,18 +900,15 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
   const availableEventLocations = useMemo(() => {
     const locSet = new Set();
     events.forEach((ev) => {
-      const loc = (ev.location || '').trim();
-      if (loc) {
-        const { city, area } = parseLocationCityAndArea(loc);
-        const cleanCity = (city || 'Pune').trim();
-        const cleanArea = (area || '').trim();
-        if (cleanCity && cleanArea) {
-          locSet.add(`${cleanCity}, ${cleanArea}`);
-        } else if (cleanArea) {
-          locSet.add(cleanArea);
-        } else if (cleanCity) {
-          locSet.add(cleanCity);
-        }
+      const locParsed = parseLocationStateAndCity(ev.location || '');
+      const cleanState = (ev.state || locParsed.state || 'Maharashtra').trim();
+      const cleanCity = (ev.city || locParsed.city || 'Pune').trim();
+      if (cleanState && cleanCity) {
+        locSet.add(`${cleanState}, ${cleanCity}`);
+      } else if (cleanCity) {
+        locSet.add(cleanCity);
+      } else if (cleanState) {
+        locSet.add(cleanState);
       }
     });
     return Array.from(locSet).sort((a, b) => a.localeCompare(b));
@@ -929,20 +933,22 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
     }
     if (eventLocationFilter !== 'all') {
       const targetLoc = eventLocationFilter.toLowerCase().trim();
-      const { city: targetCity, area: targetArea } = parseLocationCityAndArea(eventLocationFilter);
-      const searchArea = (targetArea || '').toLowerCase().trim();
+      const { state: targetState, city: targetCity } = parseLocationStateAndCity(eventLocationFilter);
       const searchCity = (targetCity || '').toLowerCase().trim();
+      const searchState = (targetState || '').toLowerCase().trim();
 
       result = result.filter((e) => {
+        const c = (e.city || '').toLowerCase();
+        const s = (e.state || '').toLowerCase();
         const loc = (e.location || '').toLowerCase();
         const ven = (e.venue || '').toLowerCase();
-        if (searchArea && searchCity && (loc.includes(searchArea) || ven.includes(searchArea)) && loc.includes(searchCity)) {
+        if (searchCity && searchState && (c === searchCity || loc.includes(searchCity) || ven.includes(searchCity)) && (s === searchState || loc.includes(searchState))) {
           return true;
         }
-        if (searchArea && (loc.includes(searchArea) || ven.includes(searchArea))) {
+        if (searchCity && (c === searchCity || loc.includes(searchCity) || ven.includes(searchCity))) {
           return true;
         }
-        return loc.includes(targetLoc) || ven.includes(targetLoc);
+        return loc.includes(targetLoc) || ven.includes(targetLoc) || c.includes(targetLoc) || s.includes(targetLoc);
       });
     }
     if (eventSearch.trim()) {
@@ -950,8 +956,14 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
       result = result.filter(
         (e) =>
           (e.title || '').toLowerCase().includes(q) ||
+          (e.custom_id || '').toLowerCase().includes(q) ||
+          (e.slug || '').toLowerCase().includes(q) ||
           (e.venue || '').toLowerCase().includes(q) ||
-          (e.location || '').toLowerCase().includes(q)
+          (e.city || '').toLowerCase().includes(q) ||
+          (e.state || '').toLowerCase().includes(q) ||
+          (e.location || '').toLowerCase().includes(q) ||
+          (e.type || e.event_type || '').toLowerCase().includes(q) ||
+          (e.category || '').toLowerCase().includes(q)
       );
     }
     return result;
@@ -1223,10 +1235,11 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
                 </div>
 
                 {/* Location Filter */}
-                <div className="w-44 sm:w-56">
+                <div className="w-52 sm:w-64">
                   <LocationFilterDropdown
                     value={eventLocationFilter}
                     onChange={(val) => setEventLocationFilter(val)}
+                    events={events}
                     locations={availableEventLocations}
                     includeAll={true}
                     allLabel="All Locations"
@@ -1321,7 +1334,9 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
                             <p className="font-semibold text-ink dark:text-slate-200 text-xs break-words max-w-[220px]">
                               {ev.venue || 'Main Hall'}
                             </p>
-                            <p className="text-[11px] text-slate-400 break-words">{ev.location || 'Pune'}</p>
+                            <p className="text-[11px] text-slate-400 break-words">
+                              {ev.city ? `${ev.city}${ev.state ? `, ${ev.state}` : ''}` : (ev.location || 'Pune')}
+                            </p>
                           </td>
                           <td className="px-4 py-3.5">
                             <p className="font-semibold text-ink dark:text-slate-200 text-xs">
@@ -1421,7 +1436,9 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <span>📍</span>
-                          <span className="break-words">{ev.venue || ev.location}</span>
+                          <span className="break-words">
+                            {ev.venue ? `${ev.venue} · ${ev.city || 'Pune'}` : (ev.location || 'Pune')}
+                          </span>
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <span>🕒</span>
@@ -1959,247 +1976,16 @@ const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.
       )}
 
       {/* MODAL 2: Add / Edit Event Modal */}
-      {isEventModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEventModalOpen(false);
-          }}
-        >
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto overscroll-contain modal-scroll-contain rounded-[2.5rem] bg-white shadow-2xl dark:bg-[#1c2733] border border-stone-200 dark:border-slate-700 animate-in zoom-in-95 duration-150 p-6 sm:p-8 space-y-5">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-slate-700">
-              <h3 className="text-xl font-black text-ink dark:text-white">
-                {editingEvent ? 'Edit Event Listing' : 'Create New Event Listing'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsEventModalOpen(false)}
-                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-white transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEvent} className="grid gap-3.5 sm:grid-cols-2 text-xs sm:text-sm">
-              <div className="sm:col-span-2">
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Event Title *</label>
-                <input
-                  type="text"
-                  value={eventFormData.title}
-                  onChange={(e) => setEventFormData({ ...eventFormData, title: e.target.value })}
-                  placeholder="e.g. Moonlight Picnic & Vinyl"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Event Type Label</label>
-                <input
-                  type="text"
-                  value={eventFormData.type}
-                  onChange={(e) => setEventFormData({ ...eventFormData, type: e.target.value })}
-                  placeholder="Live music"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Category</label>
-                <CategoryDropdown
-                  value={eventFormData.category}
-                  onChange={(val) => setEventFormData({ ...eventFormData, category: val })}
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Venue / Location Name *</label>
-                <input
-                  type="text"
-                  value={eventFormData.venue}
-                  onChange={(e) => setEventFormData({ ...eventFormData, venue: e.target.value })}
-                  placeholder="e.g. Skyline Terrace, Hard Rock Cafe, Phoenix Marketcity..."
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white shadow-xs"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">City (Maharashtra) *</label>
-                <CityDropdown
-                  value={eventFormData.city || 'Pune'}
-                  onChange={(selectedCity) => {
-                    const defaultCityAreas = getAreasForCity(selectedCity);
-                    const firstArea = defaultCityAreas[0] || selectedCity;
-                    setEventFormData({
-                      ...eventFormData,
-                      city: selectedCity,
-                      area: firstArea,
-                      location: formatLocationString(firstArea, selectedCity),
-                    });
-                  }}
-                  placeholder="Select City..."
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Area / Locality *</label>
-                <AreaDropdown
-                  city={eventFormData.city || 'Pune'}
-                  value={eventFormData.area || ''}
-                  onChange={(selectedArea) => {
-                    setEventFormData({
-                      ...eventFormData,
-                      area: selectedArea,
-                      location: formatLocationString(selectedArea, eventFormData.city || 'Pune'),
-                    });
-                  }}
-                  placeholder={`Select area in ${eventFormData.city || 'Pune'}`}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Date</label>
-                <CustomDatePicker
-                  value={eventFormData.date}
-                  onChange={(val) => setEventFormData({ ...eventFormData, date: val })}
-                  placeholder="Select event date"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Time</label>
-                <CustomTimePicker
-                  value={eventFormData.clock}
-                  onChange={(val) => setEventFormData({ ...eventFormData, clock: val })}
-                  placeholder="Select event time"
-                  required
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Price (INR, 0 for Free)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={eventFormData.price}
-                  onChange={(e) => setEventFormData({ ...eventFormData, price: Math.max(0, Number(e.target.value) || 0) })}
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                  placeholder="499"
-                />
-              </div>
-
-              {/* Cover Image Upload & Live Preview */}
-              <div className="sm:col-span-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block font-bold text-ink dark:text-slate-200">Event Cover Image *</label>
-                  {uploadingImage && (
-                    <span className="text-xs font-bold text-coral animate-pulse">Uploading image... 📸</span>
-                  )}
-                </div>
-
-                {/* Preview Banner or Dropzone */}
-                {eventFormData.image ? (
-                  <div className="relative h-44 w-full overflow-hidden rounded-2xl border border-stone-200 dark:border-slate-700 bg-stone-900 group shadow-sm">
-                    <img
-                      src={eventFormData.image}
-                      alt="Event Cover Preview"
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="rounded-xl bg-white px-3.5 py-1.5 text-xs font-bold text-ink shadow-sm hover:bg-stone-100 transition cursor-pointer"
-                      >
-                        Change Photo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEventFormData((prev) => ({ ...prev, image: '' }))}
-                        className="rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="cursor-pointer rounded-2xl border-2 border-dashed border-stone-300 dark:border-slate-700 p-6 text-center hover:border-coral transition dark:bg-[#101820]"
-                  >
-                    <span className="text-3xl">📷</span>
-                    <p className="mt-2 text-xs sm:text-sm font-bold text-ink dark:text-white">
-                      {uploadingImage ? 'Uploading photo...' : 'Click to choose event image from your device'}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Supports JPG, PNG, WEBP, GIF, AVIF (auto-optimized)</p>
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp"
-                  onChange={handleImageFileChange}
-                  className="hidden"
-                />
-
-                {/* Upload Action or URL Paste */}
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingImage}
-                    className="rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 disabled:opacity-50 shrink-0 cursor-pointer"
-                  >
-                    {uploadingImage ? 'Uploading...' : '📁 Upload from Device'}
-                  </button>
-                  <input
-                    type="text"
-                    value={eventFormData.image}
-                    onChange={(e) => setEventFormData({ ...eventFormData, image: e.target.value })}
-                    placeholder="https://images.unsplash.com/..."
-                    className="flex-1 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Description</label>
-                <textarea
-                  rows="3"
-                  value={eventFormData.description}
-                  onChange={(e) => setEventFormData({ ...eventFormData, description: e.target.value })}
-                  placeholder="Tell people what to expect..."
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
-                ></textarea>
-              </div>
-
-              <div className="sm:col-span-2 grid grid-cols-2 gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEventModalOpen(false)}
-                  className="w-full rounded-2xl border border-stone-300 bg-white py-3 font-bold text-slate-700 hover:bg-stone-50 transition dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={savingEvent}
-                  type="submit"
-                  className="w-full rounded-2xl bg-coral py-3 font-bold text-white shadow-md hover:bg-[#df503c] transition disabled:opacity-50 cursor-pointer"
-                >
-                  {savingEvent ? 'Saving...' : editingEvent ? 'Update Event' : 'Publish Event'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddEvents
+        isOpen={isEventModalOpen}
+        onClose={() => {
+          setIsEventModalOpen(false);
+          setEditingEvent(null);
+        }}
+        editingEvent={editingEvent}
+        initialData={eventFormData}
+        onSuccess={fetchAdminData}
+      />
     </div>
   );
 };

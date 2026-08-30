@@ -3,26 +3,13 @@ import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { HeroShowcase } from '../components/HeroShowcase';
 import { EventCard } from '../components/EventCard';
+import { PopularEvents } from '../components/popular_events';
+import { Categories, CATEGORIES } from '../components/categories';
 import { FilterModal } from '../components/FilterModal';
 import { apiRequest } from '../utils/api';
-import { FALLBACK_EVENTS, LOCATIONS, AREA_OPTIONS, parseLocationCityAndArea } from '../utils/constants';
+import { FALLBACK_EVENTS, parseLocationStateAndCity } from '../utils/constants';
 import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
-
-const CATEGORIES = [
-  { id: 'music', name: 'Music', icon: '🎵', bg: 'from-amber-500/20 to-orange-500/20' },
-  { id: 'nightlife', name: 'Nightlife', icon: '🍸', bg: 'from-purple-500/20 to-pink-500/20' },
-  { id: 'comedy', name: 'Comedy', icon: '🎭', bg: 'from-yellow-500/20 to-amber-500/20' },
-  { id: 'move', name: 'Sports & Move', icon: '🏃', bg: 'from-emerald-500/20 to-teal-500/20' },
-  { id: 'performances', name: 'Performances', icon: '🎪', bg: 'from-red-500/20 to-rose-500/20' },
-  { id: 'food', name: 'Food & Drinks', icon: '🍜', bg: 'from-orange-500/20 to-red-500/20' },
-  { id: 'fests', name: 'Fests & Fairs', icon: '🎡', bg: 'from-indigo-500/20 to-violet-500/20' },
-  { id: 'social', name: 'Social Mixers', icon: '✨', bg: 'from-pink-500/20 to-purple-500/20' },
-  { id: 'outdoors', name: 'Outdoors', icon: '🏕️', bg: 'from-cyan-500/20 to-blue-500/20' },
-  { id: 'create', name: 'Workshops', icon: '🎨', bg: 'from-teal-500/20 to-emerald-500/20' },
-  { id: 'screenings', name: 'Screenings', icon: '🎬', bg: 'from-blue-500/20 to-indigo-500/20' },
-  { id: 'pets', name: 'Pets', icon: '🐾', bg: 'from-amber-500/20 to-yellow-500/20' },
-];
 
 const QUICK_FILTERS = [
   { id: 'all', label: 'All' },
@@ -38,7 +25,7 @@ const getStoredEvents = () => {
     const raw = sessionStorage.getItem('MAXSHOW_EVENTS_CACHE');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length >= 20) return parsed;
     }
   } catch (_) {}
   return Object.values(FALLBACK_EVENTS);
@@ -46,15 +33,26 @@ const getStoredEvents = () => {
 
 export const HomePage = () => {
   const navigate = useNavigate();
-  const locationPicksRef = useRef(null);
   const [events, setEvents] = useState(getStoredEvents);
-  const [currentLocation, setCurrentLocation] = useState('Hinjawadi');
+  const [currentLocation, setCurrentLocation] = useState(() => {
+    const saved = localStorage.getItem('MAXSHOW_USER_LOCATION');
+    if (!saved || saved === 'All' || saved === 'All Cities') return 'Maharashtra, Mumbai';
+    const { state, city } = parseLocationStateAndCity(saved);
+    return state && city ? `${state}, ${city}` : saved;
+  });
   const [activeQuickFilter, setActiveQuickFilter] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({ sort: 'popularity', genre: 'All Genres' });
   const [visibleCount, setVisibleCount] = useState(6);
+
+  const handleLocationChange = (newLoc) => {
+    setCurrentLocation(newLoc);
+    try {
+      localStorage.setItem('MAXSHOW_USER_LOCATION', newLoc);
+    } catch (_) {}
+  };
 
   // Live real-time event updates state
   const [newlyAddedEventIds, setNewlyAddedEventIds] = useState(new Set());
@@ -78,6 +76,37 @@ export const HomePage = () => {
       clearTimeout(dismissTimer);
     };
   }, [liveBanner]);
+
+  // Ensure scroll is unlocked and visible count reset on filter change
+  useEffect(() => {
+    setVisibleCount(6);
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    document.documentElement.style.overflow = '';
+  }, [selectedCategory, activeQuickFilter, searchQuery, advancedFilters]);
+
+  // Ensure body scroll is unlocked when filter modal closes
+  useEffect(() => {
+    if (!isFilterModalOpen) {
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      document.documentElement.style.overflow = '';
+    }
+  }, [isFilterModalOpen]);
+
+  // Handle hash scrolling on landing (e.g. /#city-picks or /#categories)
+  useEffect(() => {
+    if (window.location.hash) {
+      const id = window.location.hash.replace('#', '');
+      const timer = setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Initial events fetch + Live SSE real-time listener
   useEffect(() => {
@@ -118,13 +147,11 @@ export const HomePage = () => {
             const ev = payload.event;
 
             if (action === 'create' && ev) {
-              // 1. Instantly prepend new event so it shows at the very top of discovery & showcase
               setEvents((prev) => [
                 ev,
                 ...prev.filter((item) => item.id !== ev.id && item.slug !== ev.slug),
               ]);
 
-              // 2. Mark as newly added for highlight
               setNewlyAddedEventIds((prev) => {
                 const next = new Set(prev);
                 next.add(ev.id);
@@ -132,7 +159,6 @@ export const HomePage = () => {
                 return next;
               });
 
-              // Clear highlight badge after 30s
               setTimeout(() => {
                 if (isMounted) {
                   setNewlyAddedEventIds((prev) => {
@@ -144,7 +170,6 @@ export const HomePage = () => {
                 }
               }, 30000);
 
-              // 3. Show live banner notification
               setLiveBanner({
                 id: Date.now(),
                 title: '✨ New Experience Just Added!',
@@ -208,23 +233,17 @@ export const HomePage = () => {
     };
   }, []);
 
-  // Derive available locations dynamically from active events that actually have events (<City, Area>)
   const activeLocations = useMemo(() => {
-    const locMap = new Map(); // normalized lowercase -> "City, Area"
+    const locMap = new Map();
 
     events.forEach((e) => {
-      const raw = (e.location || '').trim();
-      if (!raw) return;
+      const locParsed = parseLocationStateAndCity(e.location || '');
+      const cleanState = (e.state || locParsed.state || '').trim();
+      const cleanCity = (e.city || locParsed.city || '').trim();
 
-      const { city, area } = parseLocationCityAndArea(raw);
-      const cleanCity = (city || 'Pune').trim();
-      const cleanArea = (area || '').trim();
-
-      if (cleanCity && cleanArea) {
-        const label = `${cleanCity}, ${cleanArea}`;
+      if (cleanState && cleanCity) {
+        const label = `${cleanState}, ${cleanCity}`;
         locMap.set(label.toLowerCase(), label);
-      } else if (cleanArea) {
-        locMap.set(cleanArea.toLowerCase(), cleanArea);
       } else if (cleanCity) {
         locMap.set(cleanCity.toLowerCase(), cleanCity);
       }
@@ -233,127 +252,67 @@ export const HomePage = () => {
     return Array.from(locMap.values()).sort((a, b) => a.localeCompare(b));
   }, [events]);
 
-  // Keep currentLocation synced to first available active location if needed
-  useEffect(() => {
-    if (activeLocations.length > 0) {
-      const exists = activeLocations.some(
-        (loc) => loc.toLowerCase() === currentLocation.toLowerCase()
-      );
-      if (!exists) {
-        setCurrentLocation(activeLocations[0]);
-      }
-    }
-  }, [activeLocations, currentLocation]);
-
-  // Filtered Events for "Location Picks" section
-  const locationPicks = useMemo(() => {
-    if (!events || events.length === 0) return [];
-
-    const { city: selCity, area: selArea } = parseLocationCityAndArea(currentLocation);
-    const targetArea = (selArea || '').toLowerCase().trim();
-    const targetCity = (selCity || '').toLowerCase().trim();
-    const cleanCurrent = (currentLocation || '').toLowerCase().trim();
-
-    // 1. Direct location matches
-    const directMatches = events.filter((e) => {
-      const loc = (e.location || '').toLowerCase();
-      const ven = (e.venue || '').toLowerCase();
-      const { city: evCity, area: evArea } = parseLocationCityAndArea(e.location || '');
-      const cleanEvArea = (evArea || '').toLowerCase().trim();
-      const cleanEvCity = (evCity || '').toLowerCase().trim();
-
-      if (targetArea) {
-        if (cleanEvArea && (cleanEvArea === targetArea || cleanEvArea.includes(targetArea) || targetArea.includes(cleanEvArea))) {
-          return true;
-        }
-        if (loc.includes(targetArea) || ven.includes(targetArea)) {
-          return true;
-        }
-        return false;
-      }
-
-      if (targetCity) {
-        if (cleanEvCity && (cleanEvCity === targetCity || cleanEvCity.includes(targetCity) || targetCity.includes(cleanEvCity))) {
-          return true;
-        }
-        if (loc.includes(targetCity) || ven.includes(targetCity)) {
-          return true;
-        }
-      }
-
-      return loc.includes(cleanCurrent) || ven.includes(cleanCurrent);
-    });
-
-    // 2. If 3 or more events match this location, show all matching events (for slider/carousel)
-    if (directMatches.length >= 3) {
-      return directMatches;
-    }
-
-    // 3. If fewer than 3 events match (1 or 2 matches), keep matching events first and fill remainder randomly
-    const matchedKeys = new Set(directMatches.map((e) => e.slug || e.id || e.title));
-    const otherEvents = events.filter((e) => !matchedKeys.has(e.slug || e.id || e.title));
-
-    // Stable deterministic pseudo-shuffle based on event ID / title so cards don't flicker uncontrollably on re-renders
-    const sortedOthers = [...otherEvents].sort((a, b) => {
-      const valA = ((Number(a.id) || 0) * 17) % 31;
-      const valB = ((Number(b.id) || 0) * 17) % 31;
-      return valA - valB;
-    });
-
-    const result = [...directMatches];
-    for (const other of sortedOthers) {
-      if (result.length >= 3) break;
-      result.push(other);
-    }
-    return result;
-  }, [events, currentLocation]);
-
-  const scrollPicksLeft = () => {
-    if (locationPicksRef.current) {
-      const card = locationPicksRef.current.querySelector('article');
-      const step = card ? card.offsetWidth + 24 : 360;
-      locationPicksRef.current.scrollBy({ left: -step, behavior: 'smooth' });
-    }
-  };
-
-  const scrollPicksRight = () => {
-    if (locationPicksRef.current) {
-      const card = locationPicksRef.current.querySelector('article');
-      const step = card ? card.offsetWidth + 24 : 360;
-      locationPicksRef.current.scrollBy({ left: step, behavior: 'smooth' });
-    }
-  };
-
-  // Filtered Events for Discovery Grid
   const filteredEvents = useMemo(() => {
     let result = [...events];
 
-    // Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
         (e) =>
           (e.title || '').toLowerCase().includes(q) ||
+          (e.city || '').toLowerCase().includes(q) ||
+          (e.state || '').toLowerCase().includes(q) ||
           (e.location || '').toLowerCase().includes(q) ||
           (e.venue || '').toLowerCase().includes(q) ||
-          (e.category || '').toLowerCase().includes(q)
+          (e.category || '').toLowerCase().includes(q) ||
+          (e.description || '').toLowerCase().includes(q)
       );
     }
 
-    // Category card filter
     if (selectedCategory) {
-      result = result.filter(
-        (e) => (e.category || '').toLowerCase() === selectedCategory.toLowerCase()
-      );
+      const cat = selectedCategory.toLowerCase();
+      result = result.filter((e) => {
+        const c = (e.category || '').toLowerCase();
+        const t = (e.type || e.event_type || '').toLowerCase();
+        const title = (e.title || '').toLowerCase();
+        const desc = (e.description || '').toLowerCase();
+        const allText = `${c} ${t} ${title} ${desc}`;
+
+        if (cat === 'music') return c === 'music' || allText.includes('music') || allText.includes('concert') || allText.includes('dj') || allText.includes('live');
+        if (cat === 'nightlife') return c === 'nightlife' || allText.includes('nightlife') || allText.includes('club') || allText.includes('dj') || allText.includes('party');
+        if (cat === 'comedy') return c === 'comedy' || allText.includes('comedy') || allText.includes('stand-up') || allText.includes('standup');
+        if (cat === 'move') return c === 'move' || allText.includes('sport') || allText.includes('esport') || allText.includes('gaming') || allText.includes('fitness');
+        if (cat === 'performances') return c === 'performances' || allText.includes('theatre') || allText.includes('performance') || allText.includes('play') || allText.includes('show');
+        if (cat === 'food') return c === 'food' || allText.includes('food') || allText.includes('drinks') || allText.includes('dining') || allText.includes('culinary');
+        if (cat === 'fests') return c === 'fests' || allText.includes('fest') || allText.includes('expo') || allText.includes('fair') || allText.includes('carnival');
+        if (cat === 'social') return c === 'social' || allText.includes('social') || allText.includes('mixer') || allText.includes('meetup') || allText.includes('networking');
+        if (cat === 'outdoors') return c === 'outdoors' || allText.includes('outdoor') || allText.includes('trek') || allText.includes('camp') || allText.includes('trip');
+        if (cat === 'workshops') return c === 'create' || c === 'workshops' || allText.includes('workshop') || allText.includes('class') || allText.includes('craft');
+        if (cat === 'screenings') return allText.includes('screening') || allText.includes('cinema') || allText.includes('movie') || allText.includes('film');
+        if (cat === 'pets') return allText.includes('pet') || allText.includes('dog') || allText.includes('animal');
+        return c === cat || allText.includes(cat);
+      });
     }
 
     // Quick filter pills
     if (activeQuickFilter === 'today') {
-      result = result.filter((e) => e.day === 'today' || (e.time || '').toLowerCase().includes('today') || (e.time || '').toLowerCase().includes('tonight'));
+      result = result.filter(
+        (e) =>
+          e.day === 'today' ||
+          (e.time || '').toLowerCase().includes('today') ||
+          (e.time || '').toLowerCase().includes('tonight')
+      );
     } else if (activeQuickFilter === 'tomorrow') {
-      result = result.filter((e) => e.day === 'tomorrow' || (e.time || '').toLowerCase().includes('tomorrow'));
+      result = result.filter(
+        (e) => e.day === 'tomorrow' || (e.time || '').toLowerCase().includes('tomorrow')
+      );
     } else if (activeQuickFilter === 'weekend') {
-      result = result.filter((e) => e.day === 'weekend' || (e.time || '').toLowerCase().includes('saturday') || (e.time || '').toLowerCase().includes('sunday'));
+      result = result.filter(
+        (e) =>
+          e.day === 'weekend' ||
+          (e.time || '').toLowerCase().includes('saturday') ||
+          (e.time || '').toLowerCase().includes('sunday')
+      );
     } else if (activeQuickFilter === 'free') {
       result = result.filter((e) => Number(e.price) === 0);
     } else if (activeQuickFilter === 'under500') {
@@ -365,18 +324,16 @@ export const HomePage = () => {
       const g = advancedFilters.genre.toLowerCase();
       result = result.filter((e) => {
         const combined = `${e.type || ''} ${e.event_type || ''} ${e.category || ''} ${e.title || ''} ${e.description || ''}`.toLowerCase();
-        
-        // More precise genre matching
-        if (g.includes('comedy')) return combined.includes('comedy') || combined.includes('stand-up') || combined.includes('standup') || combined.includes('laugh');
-        if (g.includes('acoustic')) return combined.includes('acoustic') || combined.includes('unplugged');
-        if (g.includes('electronic') || g.includes('dj')) return combined.includes('electronic') || combined.includes('dj') || combined.includes('nightlife');
-        if (g.includes('rock') || g.includes('indie')) return combined.includes('rock') || combined.includes('indie') || combined.includes('band');
-        if (g.includes('workshop') || g.includes('craft')) return combined.includes('workshop') || combined.includes('craft') || combined.includes('art') || combined.includes('create');
-        if (g.includes('cinema') || g.includes('screenings')) return combined.includes('cinema') || combined.includes('film') || combined.includes('movie') || combined.includes('screen') || combined.includes('screening');
-        if (g.includes('culinary') || g.includes('dining')) return combined.includes('food') || combined.includes('culinary') || combined.includes('dining') || combined.includes('drink') || combined.includes('brunch');
-        if (g.includes('fitness') || g.includes('yoga')) return combined.includes('fitness') || combined.includes('yoga') || combined.includes('workout') || combined.includes('exercise');
-        
-        // Fallback to direct string match
+        if (g.includes('comedy')) return combined.includes('comedy') || combined.includes('stand-up') || combined.includes('standup');
+        if (g.includes('electronic') || g.includes('dj')) return combined.includes('electronic') || combined.includes('dj') || combined.includes('nightlife') || combined.includes('dance') || combined.includes('club');
+        if (g.includes('acoustic')) return combined.includes('acoustic') || combined.includes('unplugged') || combined.includes('live') || combined.includes('music');
+        if (g.includes('rock') || g.includes('indie')) return combined.includes('rock') || combined.includes('indie') || combined.includes('band') || combined.includes('music');
+        if (g.includes('workshop') || g.includes('craft')) return combined.includes('workshop') || combined.includes('craft') || combined.includes('class') || combined.includes('create');
+        if (g.includes('cinema') || g.includes('screening')) return combined.includes('screening') || combined.includes('cinema') || combined.includes('movie') || combined.includes('film');
+        if (g.includes('culinary') || g.includes('dining')) return combined.includes('food') || combined.includes('drinks') || combined.includes('dining') || combined.includes('culinary') || combined.includes('bar');
+        if (g.includes('fitness') || g.includes('yoga')) return combined.includes('fitness') || combined.includes('yoga') || combined.includes('workout') || combined.includes('marathon') || combined.includes('sport');
+        if (g.includes('music') || g.includes('concert')) return combined.includes('music') || combined.includes('singing') || combined.includes('concert');
+        if (g.includes('esports') || g.includes('game')) return combined.includes('esports') || combined.includes('gaming') || combined.includes('tournament');
         return combined.includes(g);
       });
     }
@@ -390,84 +347,57 @@ export const HomePage = () => {
       result.sort((a, b) => (Number(b.rating_count) || 0) - (Number(a.rating_count) || 0));
     } else if (advancedFilters.sort === 'date') {
       result.sort((a, b) => {
-        const dateA = new Date((a.time || '').replace(' ', 'T')).getTime() || 0;
-        const dateB = new Date((b.time || '').replace(' ', 'T')).getTime() || 0;
-        return dateA - dateB;
+        const dateA = a.date || a.time || '';
+        const dateB = b.date || b.time || '';
+        return dateA.localeCompare(dateB);
       });
     }
 
     return result;
   }, [events, searchQuery, selectedCategory, activeQuickFilter, advancedFilters]);
 
-  const displayedEvents = filteredEvents.slice(0, visibleCount);
-
   return (
-    <div className="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white flex flex-col">
-      {/* Real-time Floating Live Event Added Banner with 7s auto fade-away */}
+    <div className="min-h-screen bg-cream text-ink dark:bg-[#101820] dark:text-white flex flex-col font-sans transition-colors duration-200">
+      {/* Live New Event Banner Toast Notification */}
       {liveBanner && (
         <div
-          className={`fixed top-24 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] sm:w-96 rounded-3xl bg-white/95 dark:bg-[#1c2733]/95 border-2 border-emerald-500 shadow-2xl backdrop-blur p-4 sm:p-5 transition-all duration-700 ${
+          className={`fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl bg-white dark:bg-[#1e293b] p-4 shadow-2xl border border-coral/30 dark:border-coral/40 backdrop-blur-xl transition-all duration-700 ease-in-out ${
             isBannerFading
-              ? 'opacity-0 -translate-y-3 scale-95 pointer-events-none'
-              : 'opacity-100 translate-y-0 scale-100 animate-in slide-in-from-top-4 duration-300'
+              ? 'opacity-0 translate-y-4 pointer-events-none'
+              : 'opacity-100 translate-y-0 animate-in slide-in-from-bottom-5'
           }`}
+          role="alert"
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="relative">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500 text-white font-black text-lg shadow-md shadow-emerald-500/30">
-                  🎪
-                </div>
-                <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300">
-                    Live Event Added
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-400">Auto-close in 7s</span>
-                </div>
-                <h4 className="mt-1 font-black text-sm text-ink dark:text-white truncate">
-                  {liveBanner.title}
-                </h4>
-                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
-                  {liveBanner.subtitle}
-                </p>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-coral animate-ping" />
+              <p className="text-xs font-black uppercase tracking-wider text-coral">
+                {liveBanner.title}
+              </p>
             </div>
             <button
               onClick={() => setLiveBanner(null)}
-              className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-stone-100 hover:text-ink dark:hover:bg-slate-800 transition"
-              title="Dismiss alert"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold"
             >
               ✕
             </button>
           </div>
-
-          {/* 7-Second Animated Countdown Bar */}
-          <div className="mt-3.5 h-1 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-slate-800">
-            <div
-              className="h-full bg-emerald-500 rounded-full origin-left"
-              style={{
-                animation: 'pulse 2s infinite, shrinkWidth 7s linear forwards',
-              }}
-            />
-          </div>
-
+          <p className="mt-1 text-sm font-bold text-ink dark:text-white line-clamp-1">
+            {liveBanner.subtitle}
+          </p>
           {liveBanner.event && (
-            <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-slate-800 flex items-center justify-between gap-2">
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-700/60 pt-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {liveBanner.event.location || liveBanner.event.venue}
+              </span>
               <button
                 onClick={() => {
-                  const slug = liveBanner.event.slug || liveBanner.event.id;
-                  navigate(`/event/${encodeURIComponent(slug)}`);
+                  navigate(`/event/${encodeURIComponent(liveBanner.event.slug || liveBanner.event.id)}`);
                   setLiveBanner(null);
                 }}
-                className="w-full rounded-xl bg-ink dark:bg-slate-700 py-2 text-xs font-bold text-white hover:bg-coral dark:hover:bg-coral transition"
+                className="rounded-xl bg-coral px-3 py-1 text-xs font-bold text-white hover:bg-[#e24a36] transition cursor-pointer"
               >
-                View Experience →
+                Book Now →
               </button>
             </div>
           )}
@@ -475,172 +405,60 @@ export const HomePage = () => {
       )}
 
       <Navbar
-        currentLocation={currentLocation}
-        onLocationChange={setCurrentLocation}
+        currentLocation={currentLocation === 'All' ? 'All Cities' : currentLocation}
+        onLocationChange={handleLocationChange}
         availableLocations={activeLocations}
       />
 
-      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-12 flex-1">
+      <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-10 flex-1">
         {/* Hero Section */}
         <section aria-label="Hero showcase">
           <HeroShowcase events={events} />
         </section>
 
-        {/* Location Picks Section */}
-        <section id="location-picks" aria-label="Top picks in your area">
-          <div className="rounded-[2.5rem] bg-stone-900 p-6 sm:p-10 text-white shadow-soft">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-coral">
-                  Save the date · {currentLocation}
-                </p>
-                <h2 className="mt-1 text-2xl sm:text-4xl font-black text-white">
-                  Top picks in {currentLocation}
-                </h2>
-              </div>
-              <div className="flex items-center justify-between sm:justify-end gap-4">
-                <p className="text-sm font-semibold text-slate-400 hidden sm:block">
-                  Curated happenings around {currentLocation}
-                </p>
-                {locationPicks.length > 3 && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={scrollPicksLeft}
-                      type="button"
-                      aria-label="Previous events"
-                      className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-coral hover:text-white transition shadow-sm active:scale-95 cursor-pointer backdrop-blur-md border border-white/10"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={scrollPicksRight}
-                      type="button"
-                      aria-label="Next events"
-                      className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-coral hover:text-white transition shadow-sm active:scale-95 cursor-pointer backdrop-blur-md border border-white/10"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Popular High-Rating Events Section */}
+        <PopularEvents
+          events={events}
+          currentLocation={currentLocation}
+          onLocationChange={handleLocationChange}
+        />
 
-            <div
-              ref={locationPicksRef}
-              className={
-                locationPicks.length > 3
-                  ? "flex gap-6 overflow-x-auto scroll-smooth no-scrollbar pb-2 snap-x snap-mandatory"
-                  : "grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-              }
-            >
-              {locationPicks.map((pick) => {
-                const slug = pick.slug || pick.id;
-                const time = formatEventTime(pick.time || '', pick.day);
-                const priceText = formatPrice(pick.price);
-                const type = pick.type || pick.event_type || 'Experience';
-                return (
-                  <article
-                    key={slug}
-                    onClick={() => navigate(`/event/${encodeURIComponent(slug)}`)}
-                    className={`cursor-pointer group overflow-hidden rounded-3xl bg-white text-ink dark:bg-[#1c2733] dark:text-white dark:border-slate-700 shadow-soft transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl border border-stone-200/80 ${
-                      locationPicks.length > 3
-                        ? 'flex-none w-[85%] sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] snap-start'
-                        : ''
-                    }`}
-                  >
-                    <div className="relative h-52 w-full overflow-hidden bg-stone-100 dark:bg-stone-800">
-                      <img
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        src={pick.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80'}
-                        alt={pick.title}
-                        onError={(e) => {
-                          e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80';
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-                      <div className="rating-badge absolute top-3.5 right-3.5 z-10 flex items-center gap-1 rounded-full bg-ink/80 backdrop-blur-md px-2.5 py-1 text-xs font-black text-amber-300 shadow-md ring-1 ring-white/15 dark:bg-black/80 pointer-events-none">
-                        <span className="text-amber-400">★</span>
-                        <span>{(Number(pick.rating) || 4.8).toFixed(1)}</span>
-                      </div>
-                    </div>
-                    <div className="p-5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-coral">
-                        {type} {time ? `· ${time}` : ''}
-                      </p>
-                      <h3 className="mt-2 text-xl font-black text-ink dark:text-white line-clamp-1 group-hover:text-coral transition-colors">
-                        {pick.title}
-                      </h3>
-                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-semibold">
-                        {pick.location || pick.venue} · <span className="text-ink dark:text-white font-bold">{priceText}</span>
-                      </p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+        {/* Explore Categories Section */}
+        <Categories
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+        />
 
-        {/* Categories Bar */}
-        <section id="categories" aria-label="Categories">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl sm:text-2xl font-black text-ink dark:text-white">Explore Categories</h2>
-            {selectedCategory && (
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className="text-xs font-bold text-coral hover:underline"
-              >
-                Reset category
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
-                type="button"
-                className={`flex items-center justify-center gap-2.5 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-200 border ${
-                  selectedCategory === cat.id
-                    ? 'bg-coral text-white border-coral shadow-md scale-[1.02]'
-                    : 'bg-white text-ink border-stone-200/80 hover:border-coral/40 dark:bg-[#1c2733] dark:text-white dark:border-slate-700 hover:shadow-sm hover:-translate-y-0.5'
-                }`}
-              >
-                <span className="text-lg">{cat.icon}</span>
-                <span className="truncate">{cat.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* All Events Discovery Section */}
-        <section id="discover" aria-label="Discover all events" className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Discovery Feed Section */}
+        <section id="discovery" aria-label="Discover experiences" className="space-y-4 pt-4">
+          {/* Top Row: Title + Subtitle on Left, Search Bar on Right */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-black text-ink dark:text-white">Discover Everything</h2>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+              <h2 className="text-2xl sm:text-3xl font-black text-ink dark:text-white">
+                Discover Everything
+              </h2>
+              <p className="text-xs sm:text-sm font-semibold text-slate-400 mt-0.5">
                 Showing {filteredEvents.length} experience{filteredEvents.length === 1 ? '' : 's'}
               </p>
             </div>
 
-            {/* Search Input */}
-            <div className="relative w-full sm:w-72">
+            {/* Search Input Box with Focus Glow & Hover animations */}
+            <div className="group relative w-full sm:w-72 md:w-80 transition-all duration-300">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400 transition-transform duration-200 group-focus-within:scale-110 group-focus-within:text-coral">
+                🔍
+              </span>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search events, artists, venues..."
-                className="w-full rounded-full border border-stone-300 bg-white px-4 py-2.5 pl-10 text-xs sm:text-sm font-semibold outline-none transition focus:border-coral focus:ring-2 focus:ring-coral/20 dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
+                className="w-full rounded-full border border-stone-200/90 dark:border-white/10 bg-white dark:bg-[#182330] pl-10 pr-8 py-2 text-xs sm:text-sm font-semibold text-ink dark:text-white placeholder:text-slate-400 outline-none transition-all duration-200 hover:border-coral/50 focus:border-coral focus:ring-2 focus:ring-coral/25 focus:shadow-lg focus:shadow-coral/10 shadow-xs"
               />
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-ink dark:hover:text-white text-xs"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-ink dark:hover:text-white cursor-pointer hover:rotate-90 transition-transform duration-200"
                 >
                   ✕
                 </button>
@@ -648,80 +466,89 @@ export const HomePage = () => {
             </div>
           </div>
 
-          {/* Quick Filters Row + District Filter Button */}
-          <div className="flex items-center justify-between gap-3 overflow-x-auto pb-2 no-scrollbar">
-            <div className="flex items-center gap-2">
-              {QUICK_FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setActiveQuickFilter(f.id)}
-                  className={`rounded-full px-4 py-2 text-xs sm:text-sm font-bold transition whitespace-nowrap ${
-                    activeQuickFilter === f.id
-                      ? 'bg-ink text-white dark:bg-coral'
-                      : 'border border-stone-300 bg-white text-slate-700 hover:border-coral dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+          {/* Quick Filters Row with Interactive Pill Animations */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+              {QUICK_FILTERS.map((qf) => {
+                const isActive = activeQuickFilter === qf.id;
+                return (
+                  <button
+                    key={qf.id}
+                    onClick={() => setActiveQuickFilter(qf.id)}
+                    type="button"
+                    className={`rounded-full px-4 py-1.5 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap select-none ${
+                      isActive
+                        ? 'bg-coral text-white font-black shadow-md shadow-coral/30 scale-[1.02] ring-2 ring-coral/30 ring-offset-1 dark:ring-offset-[#101820]'
+                        : 'border border-stone-200/90 dark:border-white/10 bg-white dark:bg-[#182330] text-slate-700 dark:text-slate-300 hover:border-coral/50 hover:text-coral hover:-translate-y-0.5 hover:shadow-xs active:scale-95'
+                    }`}
+                  >
+                    {qf.label}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Filter Modal Button */}
+            {/* Filter Modal Trigger with Spin Animation & Active Badge */}
             <button
-              onClick={() => setIsFilterModalOpen(true)}
               type="button"
-              className="flex items-center gap-1.5 shrink-0 rounded-full border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-bold shadow-sm hover:border-coral hover:text-coral transition dark:border-slate-700 dark:bg-[#1c2733] dark:text-white"
+              onClick={() => setIsFilterModalOpen(true)}
+              className={`group flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer shadow-xs active:scale-95 ${
+                (advancedFilters.genre && advancedFilters.genre !== 'All Genres') ||
+                (advancedFilters.sort && advancedFilters.sort !== 'popularity')
+                  ? 'border-coral bg-coral/15 text-coral dark:bg-coral/25 ring-1 ring-coral/40 font-black'
+                  : 'border-stone-200/90 dark:border-white/10 bg-white dark:bg-[#182330] text-slate-700 dark:text-slate-200 hover:border-coral hover:text-coral hover:-translate-y-0.5 hover:shadow-md'
+              }`}
             >
-              <span>⚙️</span>
+              <span className="transition-transform duration-500 group-hover:rotate-90">⚙️</span>
               <span>Filters</span>
-              {(advancedFilters.sort !== 'popularity' || advancedFilters.genre !== 'All Genres') && (
-                <span className="h-2 w-2 rounded-full bg-coral"></span>
+              {((advancedFilters.genre && advancedFilters.genre !== 'All Genres') ||
+                (advancedFilters.sort && advancedFilters.sort !== 'popularity')) && (
+                <span className="ml-0.5 inline-block h-2 w-2 rounded-full bg-coral animate-pulse" />
               )}
             </button>
           </div>
 
           {/* Events Grid */}
-          {displayedEvents.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-stone-300 p-12 text-center dark:border-slate-700">
-              <span className="text-4xl">🎭</span>
-              <h3 className="mt-3 text-lg font-black text-ink dark:text-white">No experiences found</h3>
-              <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Try selecting a different filter or search term.
+          {filteredEvents.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-stone-300 p-12 text-center dark:border-slate-700 space-y-3">
+              <span className="text-4xl block">🔍</span>
+              <h3 className="text-lg font-black text-ink dark:text-white">No experiences found</h3>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                Try selecting a different category or clearing filters.
               </p>
               <button
                 onClick={() => {
-                  setSearchQuery('');
-                  setActiveQuickFilter('all');
                   setSelectedCategory(null);
+                  setActiveQuickFilter('all');
+                  setSearchQuery('');
                   setAdvancedFilters({ sort: 'popularity', genre: 'All Genres' });
                 }}
-                className="mt-4 rounded-full bg-coral px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#df503c] transition"
+                className="rounded-xl bg-coral px-4 py-2 text-xs font-bold text-white hover:bg-[#e24a36] transition cursor-pointer"
               >
-                Clear all filters
+                Reset All Filters
               </button>
             </div>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {displayedEvents.map((event) => (
+              {filteredEvents.slice(0, visibleCount).map((event) => (
                 <EventCard
                   key={event.slug || event.id}
                   event={event}
-                  isNewLive={newlyAddedEventIds.has(event.id) || newlyAddedEventIds.has(event.slug)}
+                  isNewlyAdded={newlyAddedEventIds.has(event.id) || newlyAddedEventIds.has(event.slug)}
                 />
               ))}
             </div>
           )}
 
-          {/* Load More Button */}
+          {/* Show More Button */}
           {visibleCount < filteredEvents.length && (
             <div className="text-center pt-4">
               <button
                 onClick={() => setVisibleCount((prev) => prev + 6)}
                 type="button"
-                className="rounded-2xl border border-stone-300 bg-white px-8 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-coral hover:text-coral hover:bg-stone-50 dark:border-slate-700 dark:bg-[#1c2733] dark:text-slate-300 dark:hover:border-coral dark:hover:text-coral cursor-pointer"
+                className="rounded-2xl border-2 border-stone-300 dark:border-slate-700 px-8 py-3 text-sm font-bold text-ink dark:text-white hover:border-coral hover:text-coral transition shadow-sm hover:shadow-md cursor-pointer"
               >
-                Load more
+                Show More Experiences ({filteredEvents.length - visibleCount} remaining)
               </button>
             </div>
           )}
@@ -730,12 +557,21 @@ export const HomePage = () => {
 
       <Footer />
 
-      <FilterModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        filters={advancedFilters}
-        onApply={(newFilters) => setAdvancedFilters(newFilters)}
-      />
+      {isFilterModalOpen && (
+        <FilterModal
+          isOpen={isFilterModalOpen}
+          filters={advancedFilters}
+          onApply={(updated) => {
+            setAdvancedFilters(updated);
+            setIsFilterModalOpen(false);
+          }}
+          onApplyFilters={(updated) => {
+            setAdvancedFilters(updated);
+            setIsFilterModalOpen(false);
+          }}
+          onClose={() => setIsFilterModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

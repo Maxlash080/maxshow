@@ -50,8 +50,9 @@ export const EventDetailsPage = () => {
 
   const eventId = Number(event.id);
   const isBookmarked = Boolean(
-    (eventId && bookmarkedIds.includes(eventId)) ||
-    (slug && bookmarkedIds.includes(String(slug)))
+    isAuthenticated &&
+    ((eventId && bookmarkedIds.includes(eventId)) ||
+    (slug && bookmarkedIds.includes(String(slug))))
   );
 
   const price = Number(event.price) || 0;
@@ -120,7 +121,7 @@ export const EventDetailsPage = () => {
               {event.title}
             </h1>
             <p className="mt-2 text-sm sm:text-base font-semibold text-slate-200">
-              📍 {event.venue || event.location} {timeFormatted ? `· 🕒 ${timeFormatted}` : ''}
+              📍 {event.venue ? `${event.venue}${event.city ? `, ${event.city}` : ''}` : (event.location || 'Pune')} {timeFormatted ? `· 🕒 ${timeFormatted}` : ''}
             </p>
           </div>
         </div>
@@ -137,7 +138,9 @@ export const EventDetailsPage = () => {
               </div>
               <div className="rounded-3xl border border-stone-200/80 bg-white p-4 dark:border-slate-700/80 dark:bg-[#1c2733] shadow-sm">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Location</p>
-                <p className="mt-1 text-sm font-black text-ink dark:text-white truncate">{event.location || event.venue}</p>
+                <p className="mt-1 text-sm font-black text-ink dark:text-white truncate">
+                  {event.city ? `${event.city}${event.state ? `, ${event.state}` : ''}` : (event.location || event.venue)}
+                </p>
               </div>
               <div className="rounded-3xl border border-stone-200/80 bg-white p-4 dark:border-slate-700/80 dark:bg-[#1c2733] shadow-sm col-span-2 sm:col-span-1">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Entry Price</p>

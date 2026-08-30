@@ -62,6 +62,8 @@ export const App = () => {
               {/* All Events Catalogue */}
               <Route path="/all-events" element={<AllEventsPage />} />
               <Route path="/all-events.html" element={<AllEventsPage />} />
+              <Route path="/events" element={<AllEventsPage />} />
+              <Route path="/events.html" element={<AllEventsPage />} />
 
               {/* Static / Settings Pages */}
               <Route path="/about" element={<AboutPage />} />

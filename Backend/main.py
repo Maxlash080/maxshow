@@ -271,6 +271,152 @@ def generate_user_username(full_name: str, phone_number: str = "") -> str:
     return f"{base}_{digits}"
 
 
+KNOWN_INDIAN_STATES = [
+    "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
+    "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi (NCT)",
+    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand",
+    "Karnataka", "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra",
+    "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab",
+    "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh",
+    "Uttarakhand", "West Bengal"
+]
+
+CITY_TO_STATE_MAP = {
+    "pune": "Maharashtra",
+    "mumbai": "Maharashtra",
+    "nagpur": "Maharashtra",
+    "nashik": "Maharashtra",
+    "pimpri-chinchwad": "Maharashtra",
+    "pimpri": "Maharashtra",
+    "thane": "Maharashtra",
+    "navi mumbai": "Maharashtra",
+    "aurangabad": "Maharashtra",
+    "chhatrapati sambhajinagar": "Maharashtra",
+    "solapur": "Maharashtra",
+    "kolhapur": "Maharashtra",
+    "amravati": "Maharashtra",
+    "nanded": "Maharashtra",
+    "bengaluru": "Karnataka",
+    "bangalore": "Karnataka",
+    "mysuru": "Karnataka",
+    "mysore": "Karnataka",
+    "hubballi": "Karnataka",
+    "mangalore": "Karnataka",
+    "mangaluru": "Karnataka",
+    "delhi": "Delhi (NCT)",
+    "new delhi": "Delhi (NCT)",
+    "hyderabad": "Telangana",
+    "secunderabad": "Telangana",
+    "warangal": "Telangana",
+    "chennai": "Tamil Nadu",
+    "coimbatore": "Tamil Nadu",
+    "madurai": "Tamil Nadu",
+    "kolkata": "West Bengal",
+    "howrah": "West Bengal",
+    "darjeeling": "West Bengal",
+    "ahmedabad": "Gujarat",
+    "surat": "Gujarat",
+    "vadodara": "Gujarat",
+    "rajkot": "Gujarat",
+    "gandhinagar": "Gujarat",
+    "jaipur": "Rajasthan",
+    "udaipur": "Rajasthan",
+    "jodhpur": "Rajasthan",
+    "kota": "Rajasthan",
+    "lucknow": "Uttar Pradesh",
+    "kanpur": "Uttar Pradesh",
+    "varanasi": "Uttar Pradesh",
+    "noida": "Uttar Pradesh",
+    "greater noida": "Uttar Pradesh",
+    "ghaziabad": "Uttar Pradesh",
+    "agra": "Uttar Pradesh",
+    "chandigarh": "Chandigarh",
+    "panaji": "Goa",
+    "margao": "Goa",
+    "vasco da gama": "Goa",
+    "mapusa": "Goa",
+    "anjuna": "Goa",
+    "mandrem": "Goa",
+    "calangute": "Goa",
+    "bhopal": "Madhya Pradesh",
+    "indore": "Madhya Pradesh",
+    "gwalior": "Madhya Pradesh",
+    "kochi": "Kerala",
+    "thiruvananthapuram": "Kerala",
+    "kozhikode": "Kerala",
+    "patna": "Bihar",
+    "gaya": "Bihar",
+    "ranchi": "Jharkhand",
+    "jamshedpur": "Jharkhand",
+    "bhubaneswar": "Odisha",
+    "cuttack": "Odisha",
+    "puri": "Odisha",
+    "guwahati": "Assam",
+    "dehradun": "Uttarakhand",
+    "haridwar": "Uttarakhand",
+    "rishikesh": "Uttarakhand",
+    "shimla": "Himachal Pradesh",
+    "manali": "Himachal Pradesh",
+    "dharamshala": "Himachal Pradesh",
+    "gurugram": "Haryana",
+    "gurgaon": "Haryana",
+    "faridabad": "Haryana",
+    "panipat": "Haryana",
+    "amritsar": "Punjab",
+    "ludhiana": "Punjab",
+    "jalandhar": "Punjab",
+    "srinagar": "Jammu and Kashmir",
+    "jammu": "Jammu and Kashmir",
+}
+
+
+def parse_location_state_and_city(raw_location: str | None) -> tuple[str, str]:
+    if not raw_location or not isinstance(raw_location, str):
+        return "Maharashtra", "Pune"
+    clean = raw_location.strip()
+    if not clean:
+        return "Maharashtra", "Pune"
+
+    if "," in clean:
+        parts = [p.strip() for p in clean.split(",") if p.strip()]
+        if len(parts) >= 2:
+            last_part = parts[-1]
+            first_part = parts[0]
+
+            # Check if last part matches an Indian state
+            for st in KNOWN_INDIAN_STATES:
+                if st.lower() == last_part.lower() or last_part.lower() in st.lower():
+                    city_candidate = ", ".join(parts[:-1]).strip()
+                    return st, city_candidate or "Pune"
+
+            # Check if first part matches an Indian state
+            for st in KNOWN_INDIAN_STATES:
+                if st.lower() == first_part.lower() or first_part.lower() in st.lower():
+                    city_candidate = ", ".join(parts[1:]).strip()
+                    return st, city_candidate or "Pune"
+
+            # Check if last part is a known city
+            if last_part.lower() in CITY_TO_STATE_MAP:
+                return CITY_TO_STATE_MAP[last_part.lower()], last_part
+
+            # Check if first part is a known city
+            if first_part.lower() in CITY_TO_STATE_MAP:
+                return CITY_TO_STATE_MAP[first_part.lower()], first_part
+
+            return "Maharashtra", parts[0]
+
+    # Single word location
+    loc_lower = clean.lower()
+    if loc_lower in CITY_TO_STATE_MAP:
+        return CITY_TO_STATE_MAP[loc_lower], clean
+
+    for st in KNOWN_INDIAN_STATES:
+        if st.lower() == loc_lower:
+            return st, clean
+
+    return "Maharashtra", clean
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -312,6 +458,8 @@ class Event(Base):
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     venue: Mapped[str] = mapped_column(String(160), nullable=False)
     time: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str] = mapped_column(String(100), nullable=False, default="Maharashtra", index=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=False, default="Pune", index=True)
     location: Mapped[str] = mapped_column(String(160), nullable=False)
     price: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     image: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -710,7 +858,9 @@ class EventRequest(BaseModel):
     type: str | None = Field(default=None, max_length=80)
     venue: str = Field(min_length=2, max_length=160)
     time: str = Field(min_length=2, max_length=100)
-    location: str = Field(min_length=2, max_length=160)
+    state: str | None = Field(default=None, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, max_length=160)
     price: int = Field(ge=0)
     image: str = Field(min_length=5, max_length=500)
     description: str = Field(min_length=2, max_length=2000)
@@ -931,6 +1081,12 @@ async def lifespan(_: FastAPI):
                 if "custom_id" not in e_cols:
                     conn.execute(text("ALTER TABLE events ADD COLUMN custom_id VARCHAR(50) NULL"))
                     conn.commit()
+                if "state" not in e_cols:
+                    conn.execute(text("ALTER TABLE events ADD COLUMN state VARCHAR(100) NOT NULL DEFAULT 'Maharashtra'"))
+                    conn.commit()
+                if "city" not in e_cols:
+                    conn.execute(text("ALTER TABLE events ADD COLUMN city VARCHAR(100) NOT NULL DEFAULT 'Pune'"))
+                    conn.commit()
                 if "rating" not in e_cols:
                     conn.execute(text("ALTER TABLE events ADD COLUMN rating FLOAT DEFAULT 0.0"))
                     conn.commit()
@@ -994,6 +1150,16 @@ async def lifespan(_: FastAPI):
             for e in events_list:
                 if not e.custom_id:
                     e.custom_id = generate_event_custom_id(e.title, e.time)
+                
+                # Backfill state and city
+                parsed_state, parsed_city = parse_location_state_and_city(e.location)
+                if not getattr(e, "state", None) or getattr(e, "state", "") == "Maharashtra":
+                    if parsed_state:
+                        e.state = parsed_state
+                if not getattr(e, "city", None) or getattr(e, "city", "") == "Pune":
+                    if parsed_city:
+                        e.city = parsed_city
+
                 event_title_map[e.title.lower().strip()] = e
 
                 # Ensure realistic initial ratings for events
@@ -1392,14 +1558,24 @@ def event_data(event: Event) -> dict:
         event.custom_id = generate_event_custom_id(event.title, event.time)
     r = float(event.rating) if event.rating is not None and event.rating > 0 else 4.8
     rc = int(event.rating_count) if event.rating_count is not None and event.rating_count >= 0 else 0
+    state_val = getattr(event, "state", None)
+    city_val = getattr(event, "city", None)
+    if not state_val or not city_val:
+        st, ct = parse_location_state_and_city(event.location)
+        state_val = state_val or st
+        city_val = city_val or ct
+
     return {
         "id": event.id,
         "custom_id": event.custom_id,
         "slug": event.slug,
         "title": event.title,
         "type": event.event_type,
+        "event_type": event.event_type,
         "venue": event.venue,
         "time": event.time,
+        "state": state_val or "Maharashtra",
+        "city": city_val or "Pune",
         "location": event.location,
         "price": event.price,
         "image": event.image,
@@ -1451,13 +1627,13 @@ def seed_events(db: Session) -> None:
     if db.query(Event).count():
         return
     events = [
-        ("moonlight-picnic", "Moonlight picnic & vinyl", "Outdoors", "Skyline Terrace · Hinjawadi", "Tonight, 8:00 PM", "Hinjawadi, Pune", 499, "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=85", "An open-air evening under string lights with curated vinyl records, artisan picnic bites, and golden sunset views across Hinjawadi.", "outdoors", "today", 4.9, 28),
-        ("blue-room", "Blue room: acoustic night", "Live music", "The Blue Room · Kasarwadi", "Friday, 7:30 PM", "Kasarwadi, Pimpri-Chinchwad", 399, "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85", "Settle into an intimate evening of unplugged originals, soft lights, and a carefully curated local line-up.", "music", "weekend", 4.8, 34),
-        ("comedy-room", "After hours: a comedy room", "Comedy", "Laugh Lane · Nigdi", "Saturday, 8:00 PM", "Nigdi, Pimpri-Chinchwad", 299, "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=85", "A relaxed late-night set featuring sharp new comics and seasoned crowd favourites.", "comedy", "weekend", 4.7, 19),
-        ("watercolour", "Watercolour in the park", "Creative workshop", "Open Studio · Aundh", "Sunday, 11:00 AM", "Aundh, Pune", 450, "https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=1200&q=85", "A slow Sunday workshop for beginners and curious painters.", "create", "weekend", 4.9, 15),
-        ("rooftop-cinema", "Rooftop cinema club", "Film & outdoors", "Skyline Terrace · Hinjawadi", "Sunday, 6:30 PM", "Hinjawadi, Pune", 550, "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=85", "A classic film under an open sky, paired with soft blankets and cinema snacks.", "outdoors", "weekend", 4.8, 42),
-        ("brunch-social", "Sunday brunch social", "Food & drinks", "Common Table · Pimpri", "Sunday, 12:30 PM", "Pimpri, Pune", 599, "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=85", "A leisurely afternoon meal designed for good conversation and new connections.", "food", "weekend", 4.7, 23),
-        ("sunrise-run", "Community sunrise run", "Move", "Riverside Track · Punawale", "Sunday, 6:00 AM", "Punawale, Pune", 0, "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=1200&q=85", "Start the day with an easy, all-level community run.", "move", "today", 5.0, 18),
+        ("moonlight-picnic", "Moonlight picnic & vinyl", "Outdoors", "Skyline Terrace · Hinjawadi", "Tonight, 8:00 PM", "Maharashtra", "Pune", "Hinjawadi, Pune", 499, "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=85", "An open-air evening under string lights with curated vinyl records, artisan picnic bites, and golden sunset views across Hinjawadi.", "outdoors", "today", 4.9, 28),
+        ("blue-room", "Blue room: acoustic night", "Live music", "The Blue Room · Kasarwadi", "Friday, 7:30 PM", "Maharashtra", "Pimpri-Chinchwad", "Kasarwadi, Pimpri-Chinchwad", 399, "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=85", "Settle into an intimate evening of unplugged originals, soft lights, and a carefully curated local line-up.", "music", "weekend", 4.8, 34),
+        ("comedy-room", "After hours: a comedy room", "Comedy", "Laugh Lane · Nigdi", "Saturday, 8:00 PM", "Maharashtra", "Pimpri-Chinchwad", "Nigdi, Pimpri-Chinchwad", 299, "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=85", "A relaxed late-night set featuring sharp new comics and seasoned crowd favourites.", "comedy", "weekend", 4.7, 19),
+        ("watercolour", "Watercolour in the park", "Creative workshop", "Open Studio · Aundh", "Sunday, 11:00 AM", "Maharashtra", "Pune", "Aundh, Pune", 450, "https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=1200&q=85", "A slow Sunday workshop for beginners and curious painters.", "create", "weekend", 4.9, 15),
+        ("rooftop-cinema", "Rooftop cinema club", "Film & outdoors", "Skyline Terrace · Hinjawadi", "Sunday, 6:30 PM", "Maharashtra", "Pune", "Hinjawadi, Pune", 550, "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=85", "A classic film under an open sky, paired with soft blankets and cinema snacks.", "outdoors", "weekend", 4.8, 42),
+        ("brunch-social", "Sunday brunch social", "Food & drinks", "Common Table · Pimpri", "Sunday, 12:30 PM", "Maharashtra", "Pune", "Pimpri, Pune", 599, "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=85", "A leisurely afternoon meal designed for good conversation and new connections.", "food", "weekend", 4.7, 23),
+        ("sunrise-run", "Community sunrise run", "Move", "Riverside Track · Punawale", "Sunday, 6:00 AM", "Maharashtra", "Pune", "Punawale, Pune", 0, "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=1200&q=85", "Start the day with an easy, all-level community run.", "move", "today", 5.0, 18),
     ]
     db.add_all([
         Event(
@@ -1467,6 +1643,8 @@ def seed_events(db: Session) -> None:
             event_type=event_type,
             venue=venue,
             time=time,
+            state=state,
+            city=city,
             location=location,
             price=price,
             image=image,
@@ -1476,7 +1654,7 @@ def seed_events(db: Session) -> None:
             rating=rating,
             rating_count=rating_count,
         )
-        for slug, title, event_type, venue, time, location, price, image, description, category, day, rating, rating_count in events
+        for slug, title, event_type, venue, time, state, city, location, price, image, description, category, day, rating, rating_count in events
     ])
     db.commit()
 
@@ -2201,19 +2379,73 @@ def ensure_image_stored_locally(image_val: str, event_id: int = None, custom_id:
 
 
 @app.get("/api/events")
-def list_events(request: Request, db: Session = Depends(get_db)) -> dict:
+def list_events(
+    request: Request,
+    city: str | None = None,
+    state: str | None = None,
+    category: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
     session_token = request.cookies.get("maxshow_session")
     user_id = touch_session(session_token)
     user_ratings = {}
     if user_id:
         user_ratings = {r.event_id: r.rating for r in db.query(Rating).filter(Rating.user_id == user_id).all()}
 
+    query = db.query(Event)
+    if city and city.strip() and city.strip().lower() not in ("all", "all cities"):
+        c_clean = city.strip().lower()
+        query = query.filter(
+            or_(
+                func.lower(Event.city) == c_clean,
+                func.lower(Event.location).like(f"%{c_clean}%"),
+                func.lower(Event.venue).like(f"%{c_clean}%"),
+            )
+        )
+    if state and state.strip() and state.strip().lower() not in ("all", "all states"):
+        s_clean = state.strip().lower()
+        query = query.filter(
+            or_(
+                func.lower(Event.state) == s_clean,
+                func.lower(Event.location).like(f"%{s_clean}%"),
+            )
+        )
+    if category and category.strip() and category.strip().lower() != "all":
+        query = query.filter(func.lower(Event.category) == category.strip().lower())
+
     events_list = []
-    for event in db.query(Event).order_by(Event.created_at.desc(), Event.id.desc()).all():
+    for event in query.order_by(Event.created_at.desc(), Event.id.desc()).all():
         ed = event_data(event)
         ed["user_rating"] = user_ratings.get(event.id)
         events_list.append(ed)
     return {"events": events_list}
+
+
+@app.get("/api/events/locations")
+def get_event_locations(db: Session = Depends(get_db)) -> dict:
+    events = db.query(Event.state, Event.city, Event.location).all()
+    states_dict: dict[str, set[str]] = {}
+    all_cities_set: set[str] = set()
+
+    for st, ct, loc in events:
+        state_name = st
+        city_name = ct
+        if not state_name or not city_name:
+            parsed_st, parsed_ct = parse_location_state_and_city(loc)
+            state_name = state_name or parsed_st
+            city_name = city_name or parsed_ct
+        if state_name and city_name:
+            states_dict.setdefault(state_name, set()).add(city_name)
+            all_cities_set.add(city_name)
+
+    states_list = [
+        {"state": state, "cities": sorted(list(cities))}
+        for state, cities in sorted(states_dict.items())
+    ]
+    return {
+        "states": states_list,
+        "cities": sorted(list(all_cities_set)),
+    }
 
 
 @app.get("/api/events/{slug}")
@@ -2448,6 +2680,16 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
     ev_type = (payload.event_type or payload.type or "Experience").strip()
     ev_day = (payload.day or "weekend").strip().lower()
 
+    st = (payload.state or "").strip()
+    ct = (payload.city or "").strip()
+    loc = (payload.location or "").strip()
+    if not st or not ct:
+        parsed_st, parsed_ct = parse_location_state_and_city(loc or "Pune, Maharashtra")
+        st = st or parsed_st
+        ct = ct or parsed_ct
+    if not loc:
+        loc = f"{ct}, {st}" if ct and st else (ct or st or "Pune, Maharashtra")
+
     cid = generate_event_custom_id(clean_title, payload.time)
     event = Event(
         custom_id=cid,
@@ -2456,7 +2698,9 @@ def create_event(payload: EventRequest, request: Request, db: Session = Depends(
         event_type=ev_type,
         venue=payload.venue.strip(),
         time=payload.time.strip(),
-        location=payload.location.strip(),
+        state=st,
+        city=ct,
+        location=loc,
         price=payload.price,
         image=payload.image.strip() or "/uploads/event_1.jpg",
         description=payload.description.strip(),
@@ -2500,12 +2744,24 @@ def update_event(identifier: str, payload: EventRequest, request: Request, db: S
             if not other:
                 event.slug = new_slug
 
+    st = (payload.state or "").strip()
+    ct = (payload.city or "").strip()
+    loc = (payload.location or "").strip()
+    if not st or not ct:
+        parsed_st, parsed_ct = parse_location_state_and_city(loc or getattr(event, "location", None) or "Pune, Maharashtra")
+        st = st or parsed_st
+        ct = ct or parsed_ct
+    if not loc:
+        loc = f"{ct}, {st}" if ct and st else (ct or st or getattr(event, "location", None) or "Pune, Maharashtra")
+
     final_image = ensure_image_stored_locally(payload.image, event_id=event.id, custom_id=event.custom_id, slug=event.slug)
     event.title = clean_title
     event.event_type = (payload.event_type or payload.type or event.event_type).strip()
     event.venue = payload.venue.strip()
     event.time = payload.time.strip()
-    event.location = payload.location.strip()
+    event.state = st
+    event.city = ct
+    event.location = loc
     event.price = payload.price
     event.image = final_image
     event.description = payload.description.strip()

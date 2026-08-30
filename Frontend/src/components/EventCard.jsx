@@ -5,13 +5,14 @@ import { useAuth } from '../context/AuthContext';
 
 export const EventCard = ({ event, isNewLive = false }) => {
   const navigate = useNavigate();
-  const { bookmarkedIds, toggleBookmark } = useAuth();
+  const { isAuthenticated, bookmarkedIds, toggleBookmark } = useAuth();
 
   const slug = event.slug || event.id;
   const eventId = Number(event.id);
   const isBookmarked = Boolean(
-    (eventId && bookmarkedIds.includes(eventId)) ||
-    (slug && bookmarkedIds.includes(String(slug)))
+    isAuthenticated &&
+    ((eventId && bookmarkedIds.includes(eventId)) ||
+    (slug && bookmarkedIds.includes(String(slug))))
   );
 
   const price = Number(event.price) || 0;
@@ -99,7 +100,7 @@ export const EventCard = ({ event, isNewLive = false }) => {
           {event.title}
         </h3>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 font-medium">
-          {event.location || event.venue} · <span className="text-ink dark:text-white font-bold">{priceText}</span>
+          {event.city ? `${event.venue ? `${event.venue}, ` : ''}${event.city}` : (event.location || event.venue)} · <span className="text-ink dark:text-white font-bold">{priceText}</span>
         </p>
       </div>
     </article>

@@ -5,7 +5,7 @@ import { HeroShowcase } from '../components/HeroShowcase';
 import { EventCard } from '../components/EventCard';
 import { FilterModal } from '../components/FilterModal';
 import { apiRequest } from '../utils/api';
-import { FALLBACK_EVENTS, LOCATIONS, AREA_OPTIONS } from '../utils/constants';
+import { FALLBACK_EVENTS, LOCATIONS, AREA_OPTIONS, parseLocationCityAndArea } from '../utils/constants';
 import { formatPrice, formatEventTime } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 
@@ -47,7 +47,7 @@ const getStoredEvents = () => {
 export const HomePage = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState(getStoredEvents);
-  const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0] !== 'Pune' ? LOCATIONS[0] : 'Hinjawadi');
+  const [currentLocation, setCurrentLocation] = useState('Hinjawadi');
   const [activeQuickFilter, setActiveQuickFilter] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,56 +207,29 @@ export const HomePage = () => {
     };
   }, []);
 
-  // Derive available locations dynamically from active events that actually have events
+  // Derive available locations dynamically from active events that actually have events (<City, Area>)
   const activeLocations = useMemo(() => {
-    const locMap = new Map(); // normalized -> displayName
-    
+    const locMap = new Map(); // normalized lowercase -> "City, Area"
+
     events.forEach((e) => {
-      const raw = (e.location || e.venue || '').trim();
+      const raw = (e.location || '').trim();
       if (!raw) return;
 
-      // Match against AREA_OPTIONS
-      const matched = AREA_OPTIONS.find((area) => {
-        const cleanArea = area.toLowerCase().replace(/,\s*pune$/i, '').trim();
-        const cleanRaw = raw.toLowerCase().trim();
-        return cleanRaw.includes(cleanArea) || cleanArea.includes(cleanRaw);
-      });
+      const { city, area } = parseLocationCityAndArea(raw);
+      const cleanCity = (city || 'Pune').trim();
+      const cleanArea = (area || '').trim();
 
-      if (matched) {
-        const shortName = matched.replace(/,\s*Pune$/i, '').trim();
-        // Filter out "Pune" as a standalone location
-        if (shortName.toLowerCase() !== 'pune' && shortName.trim() !== '') {
-          locMap.set(shortName.toLowerCase(), shortName);
-        }
-      } else {
-        const cleanRawName = raw.split(',')[0].trim();
-        // Filter out "Pune" as a standalone location and empty strings
-        if (cleanRawName && cleanRawName.toLowerCase() !== 'pune' && cleanRawName.trim() !== '') {
-          locMap.set(cleanRawName.toLowerCase(), cleanRawName);
-        }
+      if (cleanCity && cleanArea) {
+        const label = `${cleanCity}, ${cleanArea}`;
+        locMap.set(label.toLowerCase(), label);
+      } else if (cleanArea) {
+        locMap.set(cleanArea.toLowerCase(), cleanArea);
+      } else if (cleanCity) {
+        locMap.set(cleanCity.toLowerCase(), cleanCity);
       }
     });
 
-    if (locMap.size === 0) {
-      // Filter out Pune from LOCATIONS before returning fallback
-      const filteredLocations = LOCATIONS.filter(loc => loc.toLowerCase() !== 'pune');
-      return filteredLocations.length > 0 ? filteredLocations : ['Hinjawadi'];
-    }
-
-    // Final filter to ensure no "Pune" slips through
-    const finalLocations = Array.from(locMap.values()).filter(loc => loc.toLowerCase() !== 'pune');
-
-    // Sort according to AREA_OPTIONS priority
-    const sorted = finalLocations.sort((a, b) => {
-      const idxA = AREA_OPTIONS.findIndex(opt => opt.toLowerCase().includes(a.toLowerCase()));
-      const idxB = AREA_OPTIONS.findIndex(opt => opt.toLowerCase().includes(b.toLowerCase()));
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-    });
-
-    return sorted;
+    return Array.from(locMap.values()).sort((a, b) => a.localeCompare(b));
   }, [events]);
 
   // Keep currentLocation synced to first available active location if needed
@@ -266,22 +239,24 @@ export const HomePage = () => {
         (loc) => loc.toLowerCase() === currentLocation.toLowerCase()
       );
       if (!exists) {
-        // Make sure we don't set Pune as current location
-        const firstValidLocation = activeLocations[0].toLowerCase() === 'pune' 
-          ? (activeLocations[1] || 'Hinjawadi') 
-          : activeLocations[0];
-        setCurrentLocation(firstValidLocation);
+        setCurrentLocation(activeLocations[0]);
       }
     }
   }, [activeLocations, currentLocation]);
 
   // Filtered Events for "Location Picks" section
   const locationPicks = useMemo(() => {
-    const clean = currentLocation.toLowerCase().replace(/,\s*pune$/i, '').trim();
+    const clean = (currentLocation || '').toLowerCase().trim();
+    const { city: selCity, area: selArea } = parseLocationCityAndArea(currentLocation);
+    const targetArea = (selArea || '').toLowerCase().trim();
+    const targetCity = (selCity || '').toLowerCase().trim();
+
     let matched = events.filter((e) => {
       const loc = (e.location || '').toLowerCase();
       const ven = (e.venue || '').toLowerCase();
       const tit = (e.title || '').toLowerCase();
+      if (targetArea && (loc.includes(targetArea) || ven.includes(targetArea))) return true;
+      if (targetCity && loc.includes(targetCity)) return true;
       return loc.includes(clean) || ven.includes(clean) || tit.includes(clean);
     });
 

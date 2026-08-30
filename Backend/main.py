@@ -376,16 +376,77 @@ class Rating(Base):
     event: Mapped["Event"] = relationship("Event", back_populates="ratings")
 
 
+def sanitize_and_validate_email(v: str | None, required: bool = True) -> str | None:
+    if v is None:
+        if required:
+            raise ValueError("Email address is required.")
+        return None
+    clean = str(v).strip().lower()
+    if not clean:
+        if required:
+            raise ValueError("Email address is required.")
+        return None
+
+    if " " in clean:
+        raise ValueError("Email address cannot contain spaces.")
+
+    if clean.count("@") != 1:
+        raise ValueError("Please enter a valid email address with a single '@' (e.g. username@gmail.com).")
+
+    local_part, domain_part = clean.split("@", 1)
+
+    # 6 to 30 characters rule for the email username
+    if len(local_part) < 6:
+        raise ValueError(f"Email username must be at least 6 characters ({len(local_part)}/6 entered, e.g. username@gmail.com).")
+    if len(local_part) > 30:
+        raise ValueError(f"Email username cannot exceed 30 characters ({len(local_part)}/30 entered).")
+
+    # Must contain at least one letter / alphabetic character (a-z)
+    if not re.search(r"[a-z]", local_part):
+        raise ValueError("Email username must contain at least one or more letter / character (a-z). Only numbers are not allowed.")
+
+    # Allowed characters in local part
+    if not re.match(r"^[a-z0-9._%+-]+$", local_part):
+        raise ValueError("Email username can only contain letters, numbers, and standard symbols (. _ % + -).")
+
+    if local_part.startswith(".") or local_part.endswith("."):
+        raise ValueError("Email username cannot start or end with a period (.).")
+
+    if ".." in local_part:
+        raise ValueError("Email username cannot contain consecutive periods (..).")
+
+    # Reject repeating dummy character usernames
+    if re.match(r"^([a-z0-9])\1{5,}$", local_part):
+        raise ValueError("Please enter a valid, active email address (dummy repeating characters are not allowed).")
+
+    if not domain_part or "." not in domain_part:
+        raise ValueError("Please enter a valid email domain (e.g. @gmail.com).")
+
+    domain_labels = domain_part.split(".")
+    if any(len(label) == 0 for label in domain_labels):
+        raise ValueError("Please enter a valid email domain format.")
+
+    tld = domain_labels[-1]
+    if len(tld) < 2 or not tld.isalpha():
+        raise ValueError("Email domain must have a valid extension (e.g. .com, .in, .org).")
+
+    for label in domain_labels:
+        if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", label):
+            raise ValueError(f"Invalid email domain format '{domain_part}'.")
+
+    if not re.match(r"^[a-z0-9._%+-]{6,30}@[a-z0-9.-]+\.[a-z]{2,}$", clean):
+        raise ValueError("Please enter a valid email address.")
+
+    return clean
+
+
 class SendOtpRequest(BaseModel):
     email: str = Field(min_length=3, max_length=150)
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
-        clean = v.strip().lower()
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
-            raise ValueError("Please enter a valid email address.")
-        return clean
+        return sanitize_and_validate_email(v, required=True)
 
 
 class VerifyOtpRequest(BaseModel):
@@ -395,10 +456,7 @@ class VerifyOtpRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
-        clean = v.strip().lower()
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
-            raise ValueError("Please enter a valid email address.")
-        return clean
+        return sanitize_and_validate_email(v, required=True)
 
     @field_validator("otp")
     @classmethod
@@ -409,11 +467,26 @@ class VerifyOtpRequest(BaseModel):
         return clean
 
 
-DUMMY_MOBILE_PATTERNS = {
-    "1234567890", "0123456789", "2345678901", "1234567892", "1234567891",
-    "9876543210", "8765432109", "7654321098", "6543210987",
-    "9898989898", "9191919191", "9090909090", "8989898989", "7878787878", "6767676767"
-}
+def has_sequential_digits(num_str: str, min_length: int = 5) -> bool:
+    asc_count = 1
+    desc_count = 1
+    for i in range(len(num_str) - 1):
+        curr_d = int(num_str[i])
+        next_d = int(num_str[i + 1])
+        if next_d == curr_d + 1:
+            asc_count += 1
+            if asc_count >= min_length:
+                return True
+        else:
+            asc_count = 1
+
+        if next_d == curr_d - 1:
+            desc_count += 1
+            if desc_count >= min_length:
+                return True
+        else:
+            desc_count = 1
+    return False
 
 
 def sanitize_and_validate_mobile(v: str | None, required: bool = False) -> str | None:
@@ -437,12 +510,18 @@ def sanitize_and_validate_mobile(v: str | None, required: bool = False) -> str |
         raise ValueError("Mobile number must be a valid 10-digit number.")
     if clean_digits[0] not in ("6", "7", "8", "9"):
         raise ValueError("Mobile number must start with 6, 7, 8, or 9 (numbers starting with 0-5 are invalid).")
-    if re.match(r"^(\d)\1{9}$", clean_digits):
-        raise ValueError("Please enter a valid mobile number (dummy repeating numbers are not allowed).")
-    if re.search(r"(\d)\1{5,}", clean_digits):
-        raise ValueError("Please enter a valid mobile number.")
-    if clean_digits in DUMMY_MOBILE_PATTERNS:
-        raise ValueError("Please enter a valid, active mobile number.")
+    # Check for any digit repeated more than 4 times in a row (e.g. 00000, 11111, 99999)
+    if re.search(r"(\d)\1{4,}", clean_digits):
+        raise ValueError("Mobile number cannot contain the same digit repeated more than 4 times in a row.")
+    # Check for continuous sequential numbers of 5 or more digits (e.g. 12345, 56789, 98765, 54321)
+    if has_sequential_digits(clean_digits, 5):
+        raise ValueError("Mobile number cannot contain continuous sequential numbers (e.g. 12345... or 98765...).")
+    # Check for low unique digits (e.g. 9898989898, 1212121212)
+    if len(set(clean_digits)) < 4:
+        raise ValueError("Please enter a valid, active mobile number (too few unique digits).")
+    # Repeating 2-digit patterns (e.g. 98989898)
+    if re.search(r"(\d{2})\1{3,}", clean_digits):
+        raise ValueError("Please enter a valid mobile number (repeating patterns are not allowed).")
     return clean_digits
 
 
@@ -489,10 +568,7 @@ class RegisterRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
-        clean = v.strip().lower()
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
-            raise ValueError("Please enter a valid email address.")
-        return clean
+        return sanitize_and_validate_email(v, required=True)
 
     @field_validator("password")
     @classmethod
@@ -517,10 +593,7 @@ class ForgotPasswordOtpRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
-        clean = v.strip().lower()
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
-            raise ValueError("Please enter a valid email address.")
-        return clean
+        return sanitize_and_validate_email(v, required=True)
 
 
 class ResetPasswordRequest(BaseModel):
@@ -533,10 +606,7 @@ class ResetPasswordRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
-        clean = v.strip().lower()
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
-            raise ValueError("Please enter a valid email address.")
-        return clean
+        return sanitize_and_validate_email(v, required=True)
 
     @field_validator("password")
     @classmethod
@@ -597,14 +667,8 @@ class UpdateProfileRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        clean = v.strip().lower()
-        if not clean:
-            return None
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean):
-            raise ValueError("Please enter a valid email address.")
-        return clean
+        return sanitize_and_validate_email(v, required=False)
+
 
 
 class LoginRequest(BaseModel):
@@ -635,7 +699,7 @@ class AdminLoginRequest(BaseModel):
 
 class ImageUploadRequest(BaseModel):
     filename: str | None = Field(default=None, max_length=255)
-    content_type: str = Field(min_length=1, max_length=50)
+    content_type: str = Field(default="image/jpeg", max_length=100)
     data: str = Field(min_length=1)
 
 
@@ -1021,7 +1085,7 @@ async def add_no_cache_headers(request: Request, call_next):
     return response
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", "maxshow-local-session-secret-2026")
-PRESENCE_ONLINE_TIMEOUT_SECONDS = 120  # User presence is marked Online if active within last 2 minutes
+PRESENCE_ONLINE_TIMEOUT_SECONDS = 60  # User presence is marked Online if active within last 1 minute (60s)
 
 active_sessions: dict[str, int] = {}
 user_last_seen: dict[int, datetime] = {}
@@ -1138,12 +1202,15 @@ admin_broker = AdminNotificationBroker()
 
 
 def cleanup_inactive_sessions():
-    """Scans users and marks presence status as Offline if inactive for more than PRESENCE_ONLINE_TIMEOUT_SECONDS without destroying authentication session."""
+    """Scans users and marks presence status as Offline if inactive for more than PRESENCE_ONLINE_TIMEOUT_SECONDS (60s)."""
     now = datetime.now()
     for uid, last_dt in list(user_last_seen.items()):
         is_online = user_online_status.get(uid, False)
-        if is_online and (now - last_dt).total_seconds() > PRESENCE_ONLINE_TIMEOUT_SECONDS:
+        if is_online and (now - last_dt).total_seconds() >= PRESENCE_ONLINE_TIMEOUT_SECONDS:
             user_online_status[uid] = False
+            for tok, sid in list(active_sessions.items()):
+                if sid == uid:
+                    active_sessions.pop(tok, None)
             try:
                 with SessionLocal() as db:
                     u = db.get(User, uid)
@@ -1210,13 +1277,13 @@ async def session_cleanup_loop():
     """Background loop that periodically checks for inactive user presence and updates admin dashboard."""
     while True:
         try:
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
             cleanup_inactive_sessions()
         except asyncio.CancelledError:
             break
         except Exception as e:
             print(f"[Session Cleanup Loop Error]: {e}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
 
 
 def user_data(user: User) -> dict:
@@ -2035,10 +2102,42 @@ def test_live_notification(request: Request) -> dict:
 @app.post("/api/admin/upload-image")
 def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
     require_admin(request)
-    allowed_types = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
-    extension = allowed_types.get(payload.content_type)
+    allowed_types = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/avif": ".avif",
+        "image/heic": ".heic",
+        "image/bmp": ".bmp",
+        "image/pjpeg": ".jpg",
+        "image/x-png": ".png",
+        "image/jfif": ".jpg",
+    }
+    raw_ct = (payload.content_type or "image/jpeg").lower().split(";")[0].strip()
+    extension = allowed_types.get(raw_ct)
+
+    # Fallback to filename extension if content_type was generic or missing
+    if not extension and payload.filename:
+        clean_fn = payload.filename.lower().split("?")[0]
+        if clean_fn.endswith(".jpg") or clean_fn.endswith(".jpeg"):
+            extension = ".jpg"
+        elif clean_fn.endswith(".png"):
+            extension = ".png"
+        elif clean_fn.endswith(".webp"):
+            extension = ".webp"
+        elif clean_fn.endswith(".gif"):
+            extension = ".gif"
+        elif clean_fn.endswith(".avif"):
+            extension = ".avif"
+        elif clean_fn.endswith(".bmp"):
+            extension = ".bmp"
+
+    # Default to .jpg if still unknown
     if not extension:
-        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Upload a JPG, PNG, WEBP, or GIF image.")
+        extension = ".jpg"
+
     raw_data = payload.data.strip()
     if "," in raw_data and "base64," in raw_data:
         raw_data = raw_data.split("base64,")[1].strip()
@@ -2048,8 +2147,8 @@ def upload_image(payload: ImageUploadRequest, request: Request) -> dict:
         contents = base64.b64decode(raw_data)
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The image data is invalid.")
-    if len(contents) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Images must be 5 MB or smaller.")
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Images must be 10 MB or smaller.")
     upload_dir = BASE_DIR / "uploads"
     upload_dir.mkdir(exist_ok=True)
     filename = f"{uuid4().hex}{extension}"
@@ -2231,15 +2330,14 @@ def admin_overview(request: Request, db: Session = Depends(get_db)) -> dict:
                 "created_at": created_at_iso,
             })
 
-    logged_in_user_ids = set(active_sessions.values())
-    online_users_count = sum(1 for u in users if u.id in logged_in_user_ids)
+    online_users_count = sum(1 for u in users if user_online_status.get(u.id, False))
 
     users_list = []
     for u in users:
         u_bookings = user_bookings_map.get(u.id, [])
         u_total_spent = sum(item["total"] for item in u_bookings)
         u_ticket_count = sum(item["tickets"] for item in u_bookings)
-        is_user_online = (u.id in logged_in_user_ids)
+        is_user_online = bool(user_online_status.get(u.id, False))
         last_online_dt = user_last_seen.get(u.id) or getattr(u, "last_online", None) or u.created_at
         users_list.append({
             "id": u.id,
@@ -2572,6 +2670,16 @@ def create_razorpay_order(amount_in_paise: int, receipt: str, notes: dict = None
 @app.post("/api/bookings")
 @app.post("/api/bookings/")
 def create_booking(payload: BookingRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    matched_event = resolve_event(db, payload.event_id, payload.event_slug, payload.title)
+    actual_unit_price = matched_event.price if matched_event else payload.price
+
+    # STRICT CHECK: Paid events CANNOT be booked directly without online Razorpay payment
+    if actual_unit_price > 0 or payload.price > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Online payment via Razorpay is required for paid event bookings. Please use /api/payment/create-order and complete checkout.",
+        )
+
     user = get_or_create_user_for_booking(
         request,
         db,
@@ -2579,7 +2687,6 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
         email=payload.guest_email or payload.email,
         phone=payload.guest_phone or payload.phone,
     )
-    matched_event = resolve_event(db, payload.event_id, payload.event_slug, payload.title)
     u_cid = user.custom_id or generate_user_custom_id(user.full_name, user.phone_number)
     e_cid = (matched_event.custom_id if matched_event else None) or generate_event_custom_id(payload.title, payload.time)
     booking_cid = generate_booking_custom_id(u_cid, e_cid)
@@ -2592,9 +2699,9 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
         event_location=payload.location.strip(),
         event_time=payload.time.strip(),
         ticket_count=payload.quantity,
-        total_amount=payload.price * payload.quantity,
-        payment_status="Free Entry" if payload.price == 0 else "Paid",
-        payment_id="FREE" if payload.price == 0 else None,
+        total_amount=0,
+        payment_status="Free Entry",
+        payment_id="FREE",
         booking_date=datetime.now(),
     )
     db.add(booking)
@@ -2608,11 +2715,11 @@ def create_booking(payload: BookingRequest, request: Request, db: Session = Depe
         "username": user.username,
         "event_title": booking.event_title,
         "tickets": booking.ticket_count,
-        "total": booking.total_amount,
+        "total": 0,
         "booking_date": (booking.booking_date or booking.created_at).isoformat() if (booking.booking_date or booking.created_at) else "",
         "created_at": booking.created_at.isoformat() if booking.created_at else "",
     })
-    return {"message": "Tickets booked successfully.", "booking_id": booking.custom_id or str(booking.id)}
+    return {"message": "Free tickets booked successfully.", "booking_id": booking.custom_id or str(booking.id)}
 
 
 @app.post("/api/payment/create-order")
@@ -2629,11 +2736,13 @@ def create_payment_order(
         email=payload.guest_email or payload.email,
         phone=payload.guest_phone or payload.phone,
     )
-    total_amount = payload.price * payload.quantity
     matched_event = resolve_event(db, payload.event_id, payload.event_slug, payload.title)
+    # ALWAYS use the official price from the database if event exists
+    actual_unit_price = matched_event.price if matched_event else payload.price
+    total_amount = actual_unit_price * payload.quantity
 
-    # Handle Free Events directly -> write booking to DB
-    if total_amount == 0:
+    # Handle Free Events directly -> write booking to DB only if genuine 0 price
+    if total_amount == 0 and actual_unit_price == 0:
         u_cid = user.custom_id or generate_user_custom_id(user.full_name, user.phone_number)
         e_cid = (matched_event.custom_id if matched_event else None) or generate_event_custom_id(payload.title, payload.time)
         booking_cid = generate_booking_custom_id(u_cid, e_cid)
@@ -2668,11 +2777,11 @@ def create_payment_order(
         })
         return {
             "free": True,
-            "message": "Tickets booked successfully.",
+            "message": "Free tickets booked successfully.",
             "booking_id": booking.custom_id or str(booking.id),
         }
 
-    # Paid events -> create Razorpay Order (DO NOT insert booking into DB yet)
+    # Paid events -> create Razorpay Order for actual amount (DO NOT insert booking into DB yet)
     receipt_id = f"rcpt_{uuid4().hex[:12]}"
     amount_in_paise = total_amount * 100
     notes = {
@@ -2722,8 +2831,20 @@ def verify_payment(
             detail="Payment verification failed: invalid signature.",
         )
 
-    # Signature is valid -> record confirmed booking in database
+    # Idempotency check: prevent duplicate bookings for same payment ID
+    existing = db.query(Booking).filter(Booking.payment_id == payload.razorpay_payment_id).first()
+    if existing:
+        return {
+            "message": "Payment verified and tickets booked successfully.",
+            "booking_id": existing.custom_id or str(existing.id),
+            "payment_id": payload.razorpay_payment_id,
+        }
+
+    # Signature is valid -> record confirmed booking in database with authentic DB price
     matched_event = resolve_event(db, payload.event_id, payload.event_slug, payload.title)
+    actual_unit_price = matched_event.price if matched_event else payload.price
+    actual_total_amount = actual_unit_price * payload.quantity
+
     u_cid = user.custom_id or generate_user_custom_id(user.full_name, user.phone_number)
     e_cid = (matched_event.custom_id if matched_event else None) or generate_event_custom_id(payload.title, payload.time)
     booking_cid = generate_booking_custom_id(u_cid, e_cid)
@@ -2736,7 +2857,7 @@ def verify_payment(
         event_location=payload.location.strip(),
         event_time=payload.time.strip(),
         ticket_count=payload.quantity,
-        total_amount=payload.price * payload.quantity,
+        total_amount=actual_total_amount,
         payment_status="Paid (Razorpay)",
         payment_id=payload.razorpay_payment_id,
         booking_date=datetime.now(),

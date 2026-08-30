@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../utils/api';
 import { useToast } from '../context/ToastContext';
+import { validateEmail } from '../utils/formatters';
 
 export const ForgotPasswordPage = () => {
   const navigate = useNavigate();
@@ -25,6 +26,34 @@ export const ForgotPasswordPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const QUICK_EMAIL_DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com'];
+
+  // Dynamic filter: when entering @g -> gmail only, @y -> yahoo only, @ou -> outlook only
+  const getMatchingDomains = (email) => {
+    if (!email || !email.includes('@')) return [];
+    const atIndex = email.lastIndexOf('@');
+    const domainQuery = email.slice(atIndex).toLowerCase();
+    return QUICK_EMAIL_DOMAINS.filter((d) => d.startsWith(domainQuery) && d !== domainQuery);
+  };
+
+  const matchingDomains = getMatchingDomains(formData.email);
+
+  const handleDomainSelect = (domain) => {
+    const current = formData.email.trim();
+    let newEmail = '';
+    if (!current) {
+      newEmail = domain;
+    } else if (current.includes('@')) {
+      const localPart = current.slice(0, current.lastIndexOf('@'));
+      newEmail = `${localPart}${domain}`;
+    } else {
+      newEmail = `${current}${domain}`;
+    }
+    setFormData({ ...formData, email: newEmail });
+    if (otpVerified) setOtpVerified(false);
+    if (otpSent) setOtpSent(false);
+  };
 
   // 60-second OTP resend countdown timer
   useEffect(() => {
@@ -51,8 +80,9 @@ export const ForgotPasswordPage = () => {
       setErrorMessage('Please enter your MAXSHOW username.');
       return;
     }
-    if (!formData.email.trim() || !/\S+@\S+\.\S+/.test(formData.email)) {
-      setErrorMessage('Please enter a valid registered email address.');
+    const emailCheck = validateEmail(formData.email);
+    if (!emailCheck.isValid) {
+      setErrorMessage(emailCheck.error);
       return;
     }
 
@@ -366,6 +396,25 @@ export const ForgotPasswordPage = () => {
                   </button>
                 )}
               </div>
+
+              {/* Dynamic Domain Suggestions when typing @, @g, @y, @ou */}
+              {matchingDomains.length > 0 && !otpVerified && (
+                <div className="mt-2 flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar animate-fade-in">
+                  <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 shrink-0">Suggestions:</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {matchingDomains.map((domain) => (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => handleDomainSelect(domain)}
+                        className="rounded-lg bg-coral/10 hover:bg-coral text-coral hover:text-white border border-coral/30 px-2 py-1 text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
+                      >
+                        {domain}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* OTP Verification Card */}

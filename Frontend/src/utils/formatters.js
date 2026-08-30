@@ -69,6 +69,34 @@ export const formatEventTime = (timeStr, day = '') => {
 };
 
 /**
+ * Helper to detect continuous sequential ascending or descending digits (e.g. 12345, 54321)
+ */
+const hasSequentialDigits = (numStr, minLength = 5) => {
+  let ascCount = 1;
+  let descCount = 1;
+
+  for (let i = 0; i < numStr.length - 1; i++) {
+    const current = Number(numStr[i]);
+    const next = Number(numStr[i + 1]);
+
+    if (next === current + 1) {
+      ascCount++;
+      if (ascCount >= minLength) return true;
+    } else {
+      ascCount = 1;
+    }
+
+    if (next === current - 1) {
+      descCount++;
+      if (descCount >= minLength) return true;
+    } else {
+      descCount = 1;
+    }
+  }
+  return false;
+};
+
+/**
  * Validate Indian Mobile Number (10 digits, starting with 6-9, non-dummy/non-sequential)
  */
 export const validateIndianMobile = (phone) => {
@@ -88,22 +116,22 @@ export const validateIndianMobile = (phone) => {
   if (!/^[6-9]/.test(digits)) {
     return { isValid: false, error: 'Mobile number must start with 6, 7, 8, or 9.' };
   }
-  // Check for all identical digits (e.g. 1111111111, 9999999999, 8888888888, 0000000000)
-  if (/^(\d)\1{9}$/.test(digits)) {
-    return { isValid: false, error: 'Please enter a valid mobile number (dummy repeating numbers are not allowed).' };
+  // Check for any digit repeated more than 4 times in a row (e.g. 00000, 11111, 99999)
+  if (/(\d)\1{4,}/.test(digits)) {
+    return { isValid: false, error: 'Mobile number cannot contain the same digit repeated more than 4 times in a row.' };
   }
-  // Check for 6+ consecutive same digits (e.g. 9999991234)
-  if (/(\d)\1{5,}/.test(digits)) {
-    return { isValid: false, error: 'Please enter a valid mobile number.' };
+  // Check for continuous sequential numbers of 5 or more digits (e.g. 12345, 56789, 98765, 54321)
+  if (hasSequentialDigits(digits, 5)) {
+    return { isValid: false, error: 'Mobile number cannot contain continuous sequential numbers (e.g. 12345... or 98765...).' };
   }
-  // Common sequential/dummy patterns
-  const dummyPatterns = [
-    '1234567890', '0123456789', '2345678901', '1234567892', '1234567891',
-    '9876543210', '8765432109', '7654321098', '6543210987',
-    '9898989898', '9191919191', '9090909090', '8989898989', '7878787878', '6767676767'
-  ];
-  if (dummyPatterns.includes(digits)) {
-    return { isValid: false, error: 'Please enter a valid, active mobile number.' };
+  // Check for low unique digits (e.g. 9898989898, 1212121212, only 1-3 unique digits)
+  const uniqueDigits = new Set(digits.split(''));
+  if (uniqueDigits.size < 4) {
+    return { isValid: false, error: 'Please enter a valid, active mobile number (too few unique digits).' };
+  }
+  // Common 2-digit repetitive patterns (e.g. 98989898, 91919191)
+  if (/(\d{2})\1{3,}/.test(digits)) {
+    return { isValid: false, error: 'Please enter a valid mobile number (repeating patterns are not allowed).' };
   }
 
   return { isValid: true, error: '', cleanNumber: digits };
@@ -183,5 +211,86 @@ export const formatBookingDateTime = (dateStr) => {
     return String(dateStr);
   }
 };
+
+/**
+ * Validate Email Address
+ * Rules:
+ * 1. Username (before @) must be between 6 and 30 characters.
+ * 2. Allowed characters in username: letters, numbers, ., _, %, +, -
+ * 3. Username cannot start/end with a dot or contain consecutive dots (..).
+ * 4. Must contain a valid domain with a valid extension (e.g. gmail.com, outlook.com).
+ * 5. Rejects dummy repeating patterns.
+ */
+export const validateEmail = (email) => {
+  if (!email || !String(email).trim()) {
+    return { isValid: false, error: 'Email address is required.' };
+  }
+  const clean = String(email).trim().toLowerCase();
+
+  if (clean.includes(' ')) {
+    return { isValid: false, error: 'Email address cannot contain spaces.' };
+  }
+
+  const parts = clean.split('@');
+  if (parts.length !== 2) {
+    return { isValid: false, error: 'Please enter a valid email address (e.g. username@gmail.com).' };
+  }
+
+  const [localPart, domainPart] = parts;
+
+  if (localPart.length < 6) {
+    return { isValid: false, error: `Email username must be at least 6 characters (${localPart.length}/6 entered).` };
+  }
+  if (localPart.length > 30) {
+    return { isValid: false, error: `Email username cannot exceed 30 characters (${localPart.length}/30 entered).` };
+  }
+
+  if (!/[a-z]/.test(localPart)) {
+    return { isValid: false, error: 'Email username must contain at least one or more letter / character (a-z). Only numbers are not allowed.' };
+  }
+
+  if (!/^[a-z0-9._%+-]+$/.test(localPart)) {
+    return { isValid: false, error: 'Email username can only contain letters, numbers, and standard symbols (. _ % + -).' };
+  }
+
+  if (localPart.startsWith('.') || localPart.endsWith('.')) {
+    return { isValid: false, error: 'Email username cannot start or end with a period (.).' };
+  }
+
+  if (localPart.includes('..')) {
+    return { isValid: false, error: 'Email username cannot contain consecutive periods (..).' };
+  }
+
+  if (/^([a-z0-9])\1{5,}$/.test(localPart)) {
+    return { isValid: false, error: 'Please enter a valid email address (dummy repeating characters are not allowed).' };
+  }
+
+  if (!domainPart || !domainPart.includes('.')) {
+    return { isValid: false, error: 'Please enter a valid email domain (e.g. @gmail.com).' };
+  }
+
+  const domainLabels = domainPart.split('.');
+  if (domainLabels.some((l) => !l)) {
+    return { isValid: false, error: 'Please enter a valid email domain format.' };
+  }
+
+  const tld = domainLabels[domainLabels.length - 1];
+  if (tld.length < 2 || !/^[a-z]+$/.test(tld)) {
+    return { isValid: false, error: 'Email domain must have a valid extension (e.g. .com, .in, .org).' };
+  }
+
+  for (const label of domainLabels) {
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label)) {
+      return { isValid: false, error: `Invalid email domain format '${domainPart}'.` };
+    }
+  }
+
+  if (!/^[a-z0-9._%+-]{6,30}@[a-z0-9.-]+\.[a-z]{2,}$/.test(clean)) {
+    return { isValid: false, error: 'Please enter a valid email address.' };
+  }
+
+  return { isValid: true, error: '', cleanEmail: clean, localPart, domainPart };
+};
+
 
 

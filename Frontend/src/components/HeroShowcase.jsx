@@ -75,14 +75,14 @@ export const HeroShowcase = ({ events = [] }) => {
       tabIndex={0}
       title="Click to view event details"
     >
-      {/* Dual Layer Crossfading Images */}
+      {/* Dual Layer Crossfading Images with smooth zoom and crossfade */}
       <img
         src={imgSrc1 || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85'}
         alt="Featured experience"
         onError={(e) => {
           e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85';
         }}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-in-out group-hover:scale-105 ${
+        className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out group-hover:scale-105 will-change-transform ${
           activeLayer === 1 ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />
@@ -92,7 +92,7 @@ export const HeroShowcase = ({ events = [] }) => {
         onError={(e) => {
           e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=85';
         }}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-in-out group-hover:scale-105 ${
+        className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out group-hover:scale-105 will-change-transform ${
           activeLayer === 2 ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       />

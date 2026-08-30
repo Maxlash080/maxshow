@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { apiRequest } from '../utils/api';
 import { useToast } from './ToastContext';
 
-const INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes (120,000 ms)
-const HEARTBEAT_INTERVAL_MS = 35 * 1000; // 35 seconds
+const INACTIVITY_TIMEOUT_MS = 60 * 1000; // 1 minute (60,000 ms)
+const HEARTBEAT_INTERVAL_MS = 15 * 1000; // 15 seconds
 
 const AuthContext = createContext({
   user: null,
@@ -185,13 +185,13 @@ export const AuthProvider = ({ children }) => {
     setIsAdmin(false);
     setUserRatings({});
     if (isAutoLogout) {
-      showToast('You have been logged out due to inactivity.');
+      showToast('You have been logged out due to 1 minute of inactivity.');
     } else {
       showToast('You have been signed out.');
     }
   }, [showToast]);
 
-  // Movement & Inactivity Detector (Auto-logs out user if no movement/interaction for 2 minutes)
+  // Movement & Inactivity Detector (Auto-logs out user if no movement/interaction or tab minimized/hidden for 1 minute)
   useEffect(() => {
     if (!user) return;
 
@@ -199,10 +199,13 @@ export const AuthProvider = ({ children }) => {
 
     let lastThrottledTime = 0;
     const handleUserInteraction = () => {
-      const now = Date.now();
-      if (now - lastThrottledTime > 500) {
-        lastThrottledTime = now;
-        recordActivity();
+      // Only record activity if the tab is visible to prevent background activity simulations
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        if (now - lastThrottledTime > 300) {
+          lastThrottledTime = now;
+          recordActivity();
+        }
       }
     };
 
@@ -220,8 +223,19 @@ export const AuthProvider = ({ children }) => {
           logout(true);
         } else {
           recordActivity();
+          // Send an immediate heartbeat to refresh presence on backend
+          apiRequest('/api/auth/heartbeat', { method: 'POST' }).catch(() => {});
         }
       }
+    };
+
+    const handlePageHide = () => {
+      // Send quick logout beacon on page unload/close if supported
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/auth/logout');
+        }
+      } catch (_) {}
     };
 
     const events = [
@@ -229,19 +243,23 @@ export const AuthProvider = ({ children }) => {
       'mousedown',
       'mouseup',
       'keydown',
+      'keyup',
       'touchstart',
       'touchmove',
+      'touchend',
       'scroll',
       'click',
       'wheel',
       'pointermove',
       'pointerdown',
+      'focus',
     ];
 
     events.forEach((evt) => {
       window.addEventListener(evt, handleUserInteraction, { passive: true });
     });
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
 
     // Check inactivity every second
     const inactivityInterval = setInterval(() => {
@@ -262,9 +280,11 @@ export const AuthProvider = ({ children }) => {
       }
     }, 1000);
 
-    // Periodic Heartbeat (Every 35 seconds while user is actively browsing)
+    // Periodic Heartbeat (Every 15 seconds ONLY when tab is visible & user is active within 1 minute)
     const heartbeatInterval = setInterval(() => {
       if (!userRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+
       const elapsed = Date.now() - lastActivityRef.current;
       if (elapsed < INACTIVITY_TIMEOUT_MS) {
         apiRequest('/api/auth/heartbeat', { method: 'POST' }).catch(() => {});
@@ -276,6 +296,7 @@ export const AuthProvider = ({ children }) => {
         window.removeEventListener(evt, handleUserInteraction);
       });
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
       clearInterval(inactivityInterval);
       clearInterval(heartbeatInterval);
     };

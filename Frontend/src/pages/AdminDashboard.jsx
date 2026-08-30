@@ -8,10 +8,11 @@ import { formatPrice, formatEventTime, formatBookingDate, formatBookingDateTime,
 import { useLockBodyScroll } from '../utils/useLockBodyScroll';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { LocationFilterDropdown } from '../components/LocationFilterDropdown';
+import { CityDropdown } from '../components/CityDropdown';
 import { AreaDropdown } from '../components/AreaDropdown';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { CustomTimePicker } from '../components/CustomTimePicker';
-import { LOCATIONS } from '../utils/constants';
+import { LOCATIONS, getAreasForCity, parseLocationCityAndArea, formatLocationString } from '../utils/constants';
 
 const getCachedAdminData = () => {
   try {
@@ -127,50 +128,97 @@ export const AdminDashboard = () => {
     image: '',
     description: '',
   });
-  const [savingEvent, setSavingEvent] = useState(false);
+const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.88) => {
+  return new Promise((resolve, reject) => {
+    // If it's a GIF or SVG, read directly as data URL to preserve animations/vectors
+    if (file.type === 'image/gif' || file.type === 'image/svg+xml') {
+      const reader = new FileReader();
+      reader.onload = () => resolve({
+        dataUrl: reader.result,
+        contentType: file.type,
+      });
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve({ dataUrl: e.target.result, contentType: file.type || 'image/jpeg' });
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(outputType, quality);
+        resolve({ dataUrl, contentType: outputType });
+      };
+      img.onerror = () => {
+        resolve({ dataUrl: e.target.result, contentType: file.type || 'image/jpeg' });
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.readAsDataURL(file);
+  });
+};
 
   const handleImageFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      showToast('Please select a valid image file (JPG, PNG, WEBP, GIF).');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Image size must be 5 MB or smaller.');
+    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|avif|heic|bmp)$/i.test(file.name);
+    if (!isImage) {
+      showToast('Please select a valid image file (JPG, PNG, WEBP, GIF, AVIF).');
+      if (e.target) e.target.value = '';
       return;
     }
 
     setUploadingImage(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64Data = String(reader.result).split(',')[1];
-          const res = await apiRequest('/api/admin/upload-image', {
-            method: 'POST',
-            body: JSON.stringify({
-              content_type: file.type,
-              data: base64Data,
-            }),
-          });
-          setEventFormData((prev) => ({ ...prev, image: res.url }));
-          showToast('Image uploaded successfully! 📸');
-        } catch (err) {
-          showToast(err.message || 'Failed to upload image');
-        } finally {
-          setUploadingImage(false);
-        }
-      };
-      reader.onerror = () => {
-        showToast('Error reading image file');
-        setUploadingImage(false);
-      };
-      reader.readAsDataURL(file);
+      const { dataUrl, contentType } = await compressImageFile(file);
+      const base64Data = dataUrl.includes('base64,') ? dataUrl.split('base64,')[1] : dataUrl;
+
+      const res = await apiRequest('/api/admin/upload-image', {
+        method: 'POST',
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: contentType || file.type || 'image/jpeg',
+          data: base64Data,
+        }),
+      });
+
+      if (res && res.url) {
+        setEventFormData((prev) => ({ ...prev, image: res.url }));
+        showToast('Image uploaded successfully! 📸');
+      } else {
+        throw new Error('Upload returned no URL');
+      }
     } catch (err) {
-      showToast(err.message || 'Failed to process file');
+      showToast(err.message || 'Failed to upload image');
+    } finally {
       setUploadingImage(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -223,6 +271,97 @@ export const AdminDashboard = () => {
     }
   };
 
+  // Reference to manually restart SSE connection from UI
+  const restartLiveStreamRef = useRef(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  const connectingStartTimeRef = useRef(null);
+
+  // Watchdog: If syncing/connecting continues for more than 1 minute (60s), log out admin immediately
+  useEffect(() => {
+    let timer = null;
+    const isSyncingOrConnecting = (liveStatus === 'connecting' || reconnecting);
+
+    if (isSyncingOrConnecting) {
+      if (!connectingStartTimeRef.current) {
+        connectingStartTimeRef.current = Date.now();
+      }
+
+      timer = setInterval(async () => {
+        if (!connectingStartTimeRef.current) return;
+        const elapsed = Date.now() - connectingStartTimeRef.current;
+        if (elapsed >= 60 * 1000) { // 1 minute (60,000 ms)
+          clearInterval(timer);
+          connectingStartTimeRef.current = null;
+          showToast('Live sync timed out (more than 1 min). Logging out...');
+          try {
+            await apiRequest('/api/admin/logout', { method: 'POST' });
+          } catch (_) {}
+          await refreshAuth();
+          navigate('/admin');
+        }
+      }, 1000);
+    } else {
+      connectingStartTimeRef.current = null;
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [liveStatus, reconnecting, showToast, refreshAuth, navigate]);
+
+  // Manual or automatic refresh & reconnect live sync handler
+  const handleReconnectLiveSync = async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    setLiveStatus('connecting');
+    try {
+      // 1. Verify admin session and refresh dashboard data
+      const data = await apiRequest('/api/admin/overview');
+      if (data) {
+        const s = data.stats || {};
+        const uList = data.users || [];
+        const evList = data.events || [];
+        const bList = data.all_bookings || data.bookings || [];
+        const newStats = {
+          users_count: s.users ?? data.users_count ?? uList.length,
+          online_users: s.online_users ?? s.active_users ?? (uList.filter((u) => u.is_online || u.is_active).length || 0),
+          offline_users: s.offline_users ?? s.inactive_users ?? (uList.filter((u) => !u.is_online && !u.is_active).length || 0),
+          events_count: s.events ?? data.events_count ?? evList.length,
+          bookings_count: s.bookings ?? data.bookings_count ?? bList.length,
+          tickets_count: s.tickets ?? data.tickets_count ?? 0,
+          total_revenue: s.revenue ?? data.total_revenue ?? 0,
+          paid_count: s.paid_bookings ?? data.paid_count ?? 0,
+          free_count: s.free_bookings ?? data.free_count ?? 0,
+        };
+        setStats(newStats);
+        setUsers(uList);
+        setEvents(evList);
+        setBookings(bList);
+        setCachedAdminData({ stats: newStats, users: uList, events: evList, bookings: bList });
+        showToast('Live dashboard refreshed & synced! 🟢');
+      }
+
+      // 2. Reconnect SSE stream
+      if (restartLiveStreamRef.current) {
+        restartLiveStreamRef.current();
+      }
+    } catch (err) {
+      if (err.message && (err.message.includes('401') || err.message.includes('403') || err.message.includes('unauthorized') || err.message.includes('Admin sign-in required'))) {
+        showToast('Admin session expired. Logging out...');
+        try {
+          await apiRequest('/api/admin/logout', { method: 'POST' });
+        } catch (_) {}
+        await refreshAuth();
+        navigate('/admin');
+      } else {
+        showToast(err.message || 'Live sync reconnection failed. Polling active.');
+        setLiveStatus('offline');
+      }
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
   // Initial Data Load
   useEffect(() => {
     fetchAdminData();
@@ -233,15 +372,43 @@ export const AdminDashboard = () => {
     let es = null;
     let reconnectTimer = null;
     let isComponentMounted = true;
+    let consecutiveErrors = 0;
+
+    const checkAdminAuthAndHandle = async () => {
+      try {
+        await apiRequest('/api/admin/overview');
+        return true;
+      } catch (err) {
+        if (err.message && (err.message.includes('401') || err.message.includes('403') || err.message.includes('unauthorized') || err.message.includes('Admin sign-in required'))) {
+          if (isComponentMounted) {
+            showToast('Admin session expired. Logging out...');
+            try {
+              await apiRequest('/api/admin/logout', { method: 'POST' });
+            } catch (_) {}
+            await refreshAuth();
+            navigate('/admin');
+          }
+          return false;
+        }
+        return true;
+      }
+    };
 
     const connectLiveStream = () => {
       if (!isComponentMounted) return;
+      if (es) {
+        try { es.close(); } catch (_) {}
+        es = null;
+      }
       try {
         setLiveStatus('connecting');
         es = new EventSource('/api/admin/live-stream', { withCredentials: true });
 
         es.addEventListener('connected', () => {
-          if (isComponentMounted) setLiveStatus('connected');
+          if (isComponentMounted) {
+            consecutiveErrors = 0;
+            setLiveStatus('connected');
+          }
         });
 
         // LIVE REGISTRATION LISTENER
@@ -313,12 +480,13 @@ export const AdminDashboard = () => {
             // Update user in users array
             setUsers((prev) =>
               prev.map((u) => {
-                if (u.id === statusData.user_id) {
+                if (u.id === statusData.user_id || u.user_id === statusData.user_id) {
                   return {
                     ...u,
                     is_online: isNowOnline,
                     is_active: isNowOnline,
                     status: statusLabel,
+                    last_active: new Date().toISOString(),
                   };
                 }
                 return u;
@@ -365,11 +533,17 @@ export const AdminDashboard = () => {
           if (!isComponentMounted) return;
           try {
             const payload = JSON.parse(event.data);
-            const bookingObj = payload.data || payload;
-            if (!bookingObj) return;
+            const b = payload.data || payload;
+            if (!b || !b.id) return;
 
-            const ticketCount = Number(bookingObj.tickets || bookingObj.ticket_count) || 1;
-            const totalAmt = Number(bookingObj.total || bookingObj.total_amount) || 0;
+            setBookings((prev) => {
+              const exists = prev.some((item) => item.id === b.id || (b.booking_code && item.booking_code === b.booking_code));
+              if (exists) return prev;
+              return [b, ...prev];
+            });
+
+            const totalAmt = Number(b.amount || b.total_price) || 0;
+            const ticketCount = Number(b.quantity || b.tickets_count) || 1;
 
             setStats((prev) => ({
               ...prev,
@@ -405,14 +579,25 @@ export const AdminDashboard = () => {
           }
         });
 
-        es.onerror = () => {
+        es.onerror = async () => {
           if (!isComponentMounted) return;
+          consecutiveErrors++;
           setLiveStatus('connecting');
           if (es) {
-            es.close();
+            try { es.close(); } catch (_) {}
             es = null;
           }
-          reconnectTimer = setTimeout(connectLiveStream, 4000);
+
+          // Check if admin is still valid or session expired
+          const isAuthed = await checkAdminAuthAndHandle();
+          if (!isAuthed) return;
+
+          if (consecutiveErrors >= 3) {
+            setLiveStatus('offline');
+            reconnectTimer = setTimeout(connectLiveStream, 10000);
+          } else {
+            reconnectTimer = setTimeout(connectLiveStream, 3000);
+          }
         };
       } catch (_) {
         if (isComponentMounted) {
@@ -420,6 +605,12 @@ export const AdminDashboard = () => {
           reconnectTimer = setTimeout(connectLiveStream, 6000);
         }
       }
+    };
+
+    restartLiveStreamRef.current = () => {
+      consecutiveErrors = 0;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      connectLiveStream();
     };
 
     connectLiveStream();
@@ -433,11 +624,13 @@ export const AdminDashboard = () => {
 
     return () => {
       isComponentMounted = false;
-      if (es) es.close();
+      if (es) {
+        try { es.close(); } catch (_) {}
+      }
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (fallbackInterval) clearInterval(fallbackInterval);
     };
-  }, [fetchAdminData, showToast]);
+  }, [fetchAdminData, showToast, navigate, refreshAuth]);
 
   // Open User Details Modal
   const handleOpenUserDetails = async (u) => {
@@ -503,6 +696,8 @@ export const AdminDashboard = () => {
       type: 'Live music',
       category: 'music',
       venue: '',
+      city: 'Pune',
+      area: 'Hinjawadi',
       location: 'Hinjawadi, Pune',
       date: new Date().toISOString().split('T')[0],
       clock: '20:00',
@@ -515,13 +710,16 @@ export const AdminDashboard = () => {
 
   const handleOpenEditEvent = (ev) => {
     setEditingEvent(ev);
+    const locParsed = parseLocationCityAndArea(ev.location || 'Hinjawadi, Pune');
     setEventFormData({
       title: ev.title || '',
       slug: ev.slug || '',
       type: ev.type || ev.event_type || 'Live music',
       category: ev.category || 'music',
       venue: ev.venue || '',
-      location: ev.location || 'Hinjawadi, Pune',
+      city: locParsed.city,
+      area: locParsed.area,
+      location: ev.location || formatLocationString(locParsed.area, locParsed.city),
       date: ev.date || (ev.time?.split(' ')[0] || new Date().toISOString().split('T')[0]),
       clock: ev.clock || (ev.time?.split(' ')[1] || '20:00'),
       price: ev.price !== undefined ? ev.price : 499,
@@ -533,13 +731,16 @@ export const AdminDashboard = () => {
 
   const handleDuplicateEvent = (ev) => {
     setEditingEvent(null);
+    const locParsed = parseLocationCityAndArea(ev.location || 'Hinjawadi, Pune');
     setEventFormData({
       title: `${ev.title || 'Event'} (Copy)`,
       slug: '',
       type: ev.type || ev.event_type || 'Live music',
       category: ev.category || 'music',
       venue: ev.venue || '',
-      location: ev.location || 'Hinjawadi, Pune',
+      city: locParsed.city,
+      area: locParsed.area,
+      location: ev.location || formatLocationString(locParsed.area, locParsed.city),
       date: ev.date || (ev.time?.split(' ')[0] || new Date().toISOString().split('T')[0]),
       clock: ev.clock || (ev.time?.split(' ')[1] || '20:00'),
       price: ev.price !== undefined ? ev.price : 499,
@@ -550,11 +751,30 @@ export const AdminDashboard = () => {
     showToast(`Duplicating "${ev.title}". Update details and save!`);
   };
 
+  const [savingEvent, setSavingEvent] = useState(false);
+
   // Save Event (Add or Edit)
   const handleSaveEvent = async (e) => {
     e.preventDefault();
     if (!eventFormData.title.trim()) {
       showToast('Please enter an event title.');
+      return;
+    }
+
+    // Validate event date: minimum today, maximum 1 year from today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date(today);
+    maxDate.setFullYear(today.getFullYear() + 1);
+    maxDate.setHours(23, 59, 59, 999);
+
+    const eventDate = new Date((eventFormData.date || '') + 'T00:00:00');
+    if (isNaN(eventDate.getTime()) || eventDate < today) {
+      showToast('Event date cannot be in the past.');
+      return;
+    }
+    if (eventDate > maxDate) {
+      showToast('Event date cannot be more than 1 year from today.');
       return;
     }
 
@@ -564,6 +784,11 @@ export const AdminDashboard = () => {
       const generatedSlug = cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const rawSlug = eventFormData.slug.trim() ? eventFormData.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : generatedSlug;
 
+      const finalLocation = (
+        eventFormData.location ||
+        formatLocationString(eventFormData.area || 'Hinjawadi', eventFormData.city || 'Pune')
+      ).trim();
+
       const payload = {
         title: cleanTitle,
         slug: rawSlug || `event-${Date.now().toString(36)}`,
@@ -571,7 +796,7 @@ export const AdminDashboard = () => {
         event_type: eventFormData.type,
         category: eventFormData.category,
         venue: eventFormData.venue.trim(),
-        location: eventFormData.location.trim(),
+        location: finalLocation,
         time: `${eventFormData.date} ${eventFormData.clock}`,
         price: Number(eventFormData.price) || 0,
         image: eventFormData.image.trim(),
@@ -673,19 +898,32 @@ export const AdminDashboard = () => {
     events.forEach((ev) => {
       const loc = (ev.location || '').trim();
       if (loc) {
-        const clean = loc.replace(/,\s*pune$/i, '').trim();
-        if (clean && clean.toLowerCase() !== 'pune') {
-          locSet.add(clean);
+        const { city, area } = parseLocationCityAndArea(loc);
+        const cleanCity = (city || 'Pune').trim();
+        const cleanArea = (area || '').trim();
+        if (cleanCity && cleanArea) {
+          locSet.add(`${cleanCity}, ${cleanArea}`);
+        } else if (cleanArea) {
+          locSet.add(cleanArea);
+        } else if (cleanCity) {
+          locSet.add(cleanCity);
         }
       }
     });
-    LOCATIONS.forEach((l) => {
-      if (l.toLowerCase() !== 'pune') {
-        locSet.add(l);
-      }
-    });
-    return Array.from(locSet);
+    return Array.from(locSet).sort((a, b) => a.localeCompare(b));
   }, [events]);
+
+  // Auto-reset location filter to 'all' if the selected location has no events
+  useEffect(() => {
+    if (eventLocationFilter !== 'all') {
+      const exists = availableEventLocations.some(
+        (loc) => loc.toLowerCase() === eventLocationFilter.toLowerCase()
+      );
+      if (!exists) {
+        setEventLocationFilter('all');
+      }
+    }
+  }, [availableEventLocations, eventLocationFilter]);
 
   const filteredEvents = useMemo(() => {
     let result = [...events];
@@ -694,9 +932,19 @@ export const AdminDashboard = () => {
     }
     if (eventLocationFilter !== 'all') {
       const targetLoc = eventLocationFilter.toLowerCase().trim();
+      const { city: targetCity, area: targetArea } = parseLocationCityAndArea(eventLocationFilter);
+      const searchArea = (targetArea || '').toLowerCase().trim();
+      const searchCity = (targetCity || '').toLowerCase().trim();
+
       result = result.filter((e) => {
         const loc = (e.location || '').toLowerCase();
         const ven = (e.venue || '').toLowerCase();
+        if (searchArea && searchCity && (loc.includes(searchArea) || ven.includes(searchArea)) && loc.includes(searchCity)) {
+          return true;
+        }
+        if (searchArea && (loc.includes(searchArea) || ven.includes(searchArea))) {
+          return true;
+        }
         return loc.includes(targetLoc) || ven.includes(targetLoc);
       });
     }
@@ -831,49 +1079,11 @@ export const AdminDashboard = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-            {/* Live SSE Sync Status Badge */}
-            <div
-              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold shadow-xs backdrop-blur transition ${
-                liveStatus === 'connected'
-                  ? 'border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
-                  : liveStatus === 'connecting'
-                  ? 'border-amber-200 bg-amber-50/90 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300'
-                  : 'border-slate-200 bg-white/90 text-slate-600 dark:border-slate-700 dark:bg-[#101820] dark:text-slate-300'
-              }`}
-              title={
-                liveStatus === 'connected'
-                  ? 'Real-Time SSE Sync is Active. Live registrations appear instantly.'
-                  : liveStatus === 'connecting'
-                  ? 'Connecting live stream...'
-                  : 'Offline (Fallback Polling Active)'
-              }
-            >
-              {liveStatus === 'connected' ? (
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              ) : liveStatus === 'connecting' ? (
-                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
-              ) : (
-                <span className="h-2 w-2 rounded-full bg-slate-400"></span>
-              )}
-              <span className="whitespace-nowrap text-[11px] sm:text-xs">
-                {liveStatus === 'connected'
-                  ? 'Live Sync'
-                  : liveStatus === 'connecting'
-                  ? 'Connecting...'
-                  : 'Polling'}
-              </span>
-            </div>
-
             {/* Website Option */}
             <Link
               to="/"
-              target="_blank"
-              rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-full border border-stone-200/90 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-1 text-xs font-bold text-slate-700 hover:border-coral hover:text-coral transition-all shadow-xs dark:text-slate-200 dark:hover:border-coral dark:hover:text-coral"
-              title="Open MAXSHOW Website Home Page to check live events"
+              title="Go to MAXSHOW Website Home Page"
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
@@ -882,19 +1092,6 @@ export const AdminDashboard = () => {
               </svg>
               <span className="hidden sm:inline">Website</span>
             </Link>
-
-            {/* Test Live Trigger Button */}
-            <button
-              onClick={handleTestLiveAlert}
-              disabled={testingLive}
-              className="flex items-center gap-1.5 rounded-full border border-purple-200 dark:border-purple-900/50 bg-purple-50/90 dark:bg-purple-950/40 px-3 py-1 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-all dark:text-purple-300 dark:hover:bg-purple-900/40 disabled:opacity-50 shadow-xs active:scale-95"
-              title="Trigger a simulated real-time user registration to preview the live experience"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 2v7.31L4.69 18.5a2 2 0 0 0 1.62 3.5h11.38a2 2 0 0 0 1.62-3.5L14 9.31V2" />
-              </svg>
-              <span className="hidden sm:inline">{testingLive ? 'Simulating...' : 'Test Alert'}</span>
-            </button>
 
             <button
               onClick={handleAdminSignOut}
@@ -995,7 +1192,7 @@ export const AdminDashboard = () => {
         {activeTab === 'events' && (
           <section className="space-y-5">
             {/* Filter & Action Controls Toolbar */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 bg-white/70 dark:bg-[#182330]/70 p-3 sm:p-4 rounded-3xl border border-stone-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
+            <div className="relative z-30 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 bg-white/70 dark:bg-[#182330]/70 p-3 sm:p-4 rounded-3xl border border-stone-200/80 dark:border-white/10 shadow-xs backdrop-blur-md">
               <div className="flex flex-wrap items-center gap-2.5 flex-1">
                 {/* Search Input */}
                 <div className="relative flex items-center flex-1 min-w-[220px] sm:max-w-xs">
@@ -1019,7 +1216,7 @@ export const AdminDashboard = () => {
                 </div>
 
                 {/* Category Filter */}
-                <div className="w-36 sm:w-44">
+                <div className="w-40 sm:w-48">
                   <CategoryDropdown
                     value={eventCategoryFilter}
                     onChange={(val) => setEventCategoryFilter(val)}
@@ -1029,7 +1226,7 @@ export const AdminDashboard = () => {
                 </div>
 
                 {/* Location Filter */}
-                <div className="w-36 sm:w-44">
+                <div className="w-44 sm:w-56">
                   <LocationFilterDropdown
                     value={eventLocationFilter}
                     onChange={(val) => setEventLocationFilter(val)}
@@ -1108,8 +1305,8 @@ export const AdminDashboard = () => {
                                   e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=300&q=80';
                                 }}
                               />
-                              <div className="min-w-0 max-w-[200px] sm:max-w-xs">
-                                <p className="font-bold text-ink dark:text-white truncate" title={ev.title}>
+                              <div className="min-w-[180px] max-w-sm">
+                                <p className="font-bold text-ink dark:text-white break-words" title={ev.title}>
                                   {ev.title}
                                 </p>
                                 <span className="text-[11px] font-semibold text-slate-400 capitalize">
@@ -1124,10 +1321,10 @@ export const AdminDashboard = () => {
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
-                            <p className="font-semibold text-ink dark:text-slate-200 text-xs truncate max-w-[150px]">
+                            <p className="font-semibold text-ink dark:text-slate-200 text-xs break-words max-w-[220px]">
                               {ev.venue || 'Main Hall'}
                             </p>
-                            <p className="text-[11px] text-slate-400">{ev.location || 'Pune'}</p>
+                            <p className="text-[11px] text-slate-400 break-words">{ev.location || 'Pune'}</p>
                           </td>
                           <td className="px-4 py-3.5">
                             <p className="font-semibold text-ink dark:text-slate-200 text-xs">
@@ -1154,15 +1351,24 @@ export const AdminDashboard = () => {
                                 type="button"
                                 onClick={() => handleOpenEditEvent(ev)}
                                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200/90 dark:border-white/10 bg-white dark:bg-white/5 hover:border-coral hover:text-coral text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
-                                title="Edit this event"
+                                title="Edit event details"
                               >
                                 <span>✏️</span>
-                                <span className="hidden sm:inline">Edit</span>
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateEvent(ev)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-stone-200/90 dark:border-white/10 bg-white dark:bg-white/5 hover:border-coral hover:text-coral text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+                                title="Duplicate this event"
+                              >
+                                <span>📋</span>
+                                <span>Copy</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteEvent(ev)}
-                                className="p-1.5 rounded-xl border border-stone-200/90 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-red-50 hover:border-red-300 text-red-500 text-xs font-bold transition shadow-2xs dark:hover:bg-red-950/40 cursor-pointer"
+                                className="p-1.5 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/80 dark:bg-red-950/30 hover:bg-red-500 hover:text-white text-red-600 dark:text-red-400 text-xs font-bold transition shadow-2xs cursor-pointer"
                                 title="Delete this event"
                               >
                                 🗑️
@@ -1213,12 +1419,12 @@ export const AdminDashboard = () => {
                           </span>
                         </div>
 
-                        <h3 className="text-base font-black text-ink dark:text-white line-clamp-1 group-hover:text-coral transition-colors">
+                        <h3 className="text-base font-black text-ink dark:text-white group-hover:text-coral transition-colors break-words">
                           {ev.title}
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <span>📍</span>
-                          <span className="truncate">{ev.venue || ev.location}</span>
+                          <span className="break-words">{ev.venue || ev.location}</span>
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                           <span>🕒</span>
@@ -1809,24 +2015,49 @@ export const AdminDashboard = () => {
                 />
               </div>
 
-              <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Venue / Location Name</label>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Venue / Location Name *</label>
                 <input
                   type="text"
                   value={eventFormData.venue}
                   onChange={(e) => setEventFormData({ ...eventFormData, venue: e.target.value })}
-                  placeholder="e.g. Skyline Terrace · Hinjawadi"
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white"
+                  placeholder="e.g. Skyline Terrace, Hard Rock Cafe, Phoenix Marketcity..."
+                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 font-semibold outline-none focus:border-coral dark:border-slate-700 dark:bg-[#101820] dark:text-white shadow-xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="mb-1 block font-bold text-ink dark:text-slate-200">City / Area</label>
+                <label className="mb-1 block font-bold text-ink dark:text-slate-200">City (Maharashtra) *</label>
+                <CityDropdown
+                  value={eventFormData.city || 'Pune'}
+                  onChange={(selectedCity) => {
+                    const defaultCityAreas = getAreasForCity(selectedCity);
+                    const firstArea = defaultCityAreas[0] || selectedCity;
+                    setEventFormData({
+                      ...eventFormData,
+                      city: selectedCity,
+                      area: firstArea,
+                      location: formatLocationString(firstArea, selectedCity),
+                    });
+                  }}
+                  placeholder="Select City..."
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-bold text-ink dark:text-slate-200">Area / Locality *</label>
                 <AreaDropdown
-                  value={eventFormData.location}
-                  onChange={(val) => setEventFormData({ ...eventFormData, location: val })}
-                  placeholder="e.g. Hinjawadi, Pune"
+                  city={eventFormData.city || 'Pune'}
+                  value={eventFormData.area || ''}
+                  onChange={(selectedArea) => {
+                    setEventFormData({
+                      ...eventFormData,
+                      area: selectedArea,
+                      location: formatLocationString(selectedArea, eventFormData.city || 'Pune'),
+                    });
+                  }}
+                  placeholder={`Select area in ${eventFormData.city || 'Pune'}`}
                   required
                 />
               </div>
@@ -1909,14 +2140,14 @@ export const AdminDashboard = () => {
                     <p className="mt-2 text-xs sm:text-sm font-bold text-ink dark:text-white">
                       {uploadingImage ? 'Uploading photo...' : 'Click to choose event image from your device'}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Supports JPG, PNG, WEBP, GIF up to 5 MB</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Supports JPG, PNG, WEBP, GIF, AVIF (auto-optimized)</p>
                   </div>
                 )}
 
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp"
                   onChange={handleImageFileChange}
                   className="hidden"
                 />

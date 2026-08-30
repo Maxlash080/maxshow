@@ -26,7 +26,7 @@ export const CategoryDropdown = ({
   );
 
   return (
-    <div className={`relative ${isOpen ? 'z-30' : 'z-10'} ${className}`} ref={dropdownRef}>
+    <div className={`relative ${isOpen ? 'z-50' : 'z-10'} ${className}`} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -62,7 +62,7 @@ export const CategoryDropdown = ({
         <div
           onWheel={(e) => e.stopPropagation()}
           data-dropdown-popover
-          className="absolute left-0 right-0 top-full mt-1.5 max-h-64 overflow-y-auto overscroll-contain rounded-2xl border border-stone-200 bg-white p-1.5 shadow-2xl dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in zoom-in-95 duration-150"
+          className="absolute left-0 top-full mt-1.5 z-50 min-w-full sm:min-w-[220px] max-h-64 overflow-y-auto overscroll-contain rounded-2xl border border-stone-200 bg-white p-1.5 shadow-2xl dark:border-slate-700 dark:bg-[#1c2733] animate-in fade-in zoom-in-95 duration-150"
         >
           {includeAll && (
             <button

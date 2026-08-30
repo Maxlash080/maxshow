@@ -14,11 +14,34 @@ export const CustomDatePicker = ({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Maximum allowed date: exactly 1 year from today (23:59:59)
+  const maxDate = new Date(today);
+  maxDate.setFullYear(today.getFullYear() + 1);
+  maxDate.setHours(23, 59, 59, 999);
+
   // Parse current value (YYYY-MM-DD) or default to today
   const selectedDate = value ? new Date(value + 'T00:00:00') : null;
 
-  const [viewYear, setViewYear] = useState(selectedDate ? selectedDate.getFullYear() : today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(selectedDate ? selectedDate.getMonth() : today.getMonth());
+  const getInitialYear = () => {
+    if (selectedDate && !isNaN(selectedDate.getTime())) {
+      if (selectedDate > maxDate) return maxDate.getFullYear();
+      if (selectedDate < today) return today.getFullYear();
+      return selectedDate.getFullYear();
+    }
+    return today.getFullYear();
+  };
+
+  const getInitialMonth = () => {
+    if (selectedDate && !isNaN(selectedDate.getTime())) {
+      if (selectedDate > maxDate) return maxDate.getMonth();
+      if (selectedDate < today) return today.getMonth();
+      return selectedDate.getMonth();
+    }
+    return today.getMonth();
+  };
+
+  const [viewYear, setViewYear] = useState(getInitialYear);
+  const [viewMonth, setViewMonth] = useState(getInitialMonth);
 
   // Close when clicking outside
   useEffect(() => {
@@ -36,8 +59,16 @@ export const CustomDatePicker = ({
     if (value) {
       const d = new Date(value + 'T00:00:00');
       if (!isNaN(d.getTime())) {
-        setViewYear(d.getFullYear());
-        setViewMonth(d.getMonth());
+        if (d > maxDate) {
+          setViewYear(maxDate.getFullYear());
+          setViewMonth(maxDate.getMonth());
+        } else if (d < today) {
+          setViewYear(today.getFullYear());
+          setViewMonth(today.getMonth());
+        } else {
+          setViewYear(d.getFullYear());
+          setViewMonth(d.getMonth());
+        }
       }
     }
   }, [value]);
@@ -47,8 +78,12 @@ export const CustomDatePicker = ({
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const canGoPrev = viewYear > today.getFullYear() || (viewYear === today.getFullYear() && viewMonth > today.getMonth());
+  const canGoNext = viewYear < maxDate.getFullYear() || (viewYear === maxDate.getFullYear() && viewMonth < maxDate.getMonth());
+
   const handlePrevMonth = (e) => {
     e.stopPropagation();
+    if (!canGoPrev) return;
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear(viewYear - 1);
@@ -59,6 +94,7 @@ export const CustomDatePicker = ({
 
   const handleNextMonth = (e) => {
     e.stopPropagation();
+    if (!canGoNext) return;
     if (viewMonth === 11) {
       setViewMonth(0);
       setViewYear(viewYear + 1);
@@ -77,23 +113,22 @@ export const CustomDatePicker = ({
     const cellDate = new Date(viewYear, viewMonth, day);
     cellDate.setHours(0, 0, 0, 0);
 
-    // Prevent selecting any past dates before today
-    if (cellDate < today) return;
+    // Prevent selecting any past dates or dates beyond 1 year
+    if (cellDate < today || cellDate > maxDate) return;
 
     const formatted = formatDateToString(viewYear, viewMonth, day);
     onChange(formatted);
-    // Keep popover open so user can see selection and confirm with "Done"
   };
 
   const handleQuickSelect = (daysOffset) => {
     const target = new Date();
     target.setHours(0, 0, 0, 0);
     target.setDate(target.getDate() + daysOffset);
+    if (target > maxDate) return;
     const formatted = formatDateToString(target.getFullYear(), target.getMonth(), target.getDate());
     onChange(formatted);
     setViewYear(target.getFullYear());
     setViewMonth(target.getMonth());
-    // Keep popover open so user can see selection and confirm with "Done"
   };
 
   const handleDone = () => {
@@ -116,7 +151,7 @@ export const CustomDatePicker = ({
     : '';
 
   return (
-    <div className={`relative ${isOpen ? 'z-30' : 'z-10'} ${className}`} ref={containerRef}>
+    <div className={`relative ${isOpen ? 'z-50' : 'z-10'} ${className}`} ref={containerRef}>
       {/* Trigger Input Button */}
       <button
         type="button"
@@ -159,8 +194,13 @@ export const CustomDatePicker = ({
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="grid h-8 w-8 place-items-center rounded-xl bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-coral hover:text-white dark:hover:bg-coral transition"
-              title="Previous Month"
+              disabled={!canGoPrev}
+              className={`grid h-8 w-8 place-items-center rounded-xl transition ${
+                canGoPrev
+                  ? 'bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-coral hover:text-white dark:hover:bg-coral cursor-pointer'
+                  : 'bg-stone-50 dark:bg-slate-900 text-stone-300 dark:text-slate-700 opacity-40 cursor-not-allowed pointer-events-none'
+              }`}
+              title={canGoPrev ? 'Previous Month' : 'Cannot select past months'}
             >
               ‹
             </button>
@@ -170,8 +210,13 @@ export const CustomDatePicker = ({
             <button
               type="button"
               onClick={handleNextMonth}
-              className="grid h-8 w-8 place-items-center rounded-xl bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-coral hover:text-white dark:hover:bg-coral transition"
-              title="Next Month"
+              disabled={!canGoNext}
+              className={`grid h-8 w-8 place-items-center rounded-xl transition ${
+                canGoNext
+                  ? 'bg-stone-100 dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-coral hover:text-white dark:hover:bg-coral cursor-pointer'
+                  : 'bg-stone-50 dark:bg-slate-900 text-stone-300 dark:text-slate-700 opacity-40 cursor-not-allowed pointer-events-none'
+              }`}
+              title={canGoNext ? 'Next Month' : 'Limit: 1 year from today'}
             >
               ›
             </button>
@@ -202,6 +247,8 @@ export const CustomDatePicker = ({
               cellDate.setHours(0, 0, 0, 0);
 
               const isPast = cellDate < today;
+              const isFutureLimit = cellDate > maxDate;
+              const isDisabled = isPast || isFutureLimit;
 
               const isSelected =
                 selectedDate &&
@@ -214,12 +261,13 @@ export const CustomDatePicker = ({
                 today.getMonth() === viewMonth &&
                 today.getDate() === dayNum;
 
-              if (isPast) {
+              if (isDisabled) {
                 return (
                   <button
                     key={`day-${dayNum}`}
                     type="button"
                     disabled
+                    title={isPast ? 'Past dates not allowed' : 'Max 1 year from today'}
                     className="grid h-8 w-8 place-items-center rounded-xl text-xs font-semibold text-stone-300 dark:text-slate-600 cursor-not-allowed opacity-35 select-none pointer-events-none"
                   >
                     {dayNum}

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { validateIndianMobile } from '../utils/formatters';
+import { validateIndianMobile, validateEmail } from '../utils/formatters';
 
 export const RegistrationPage = () => {
   const navigate = useNavigate();
@@ -46,6 +46,38 @@ export const RegistrationPage = () => {
     return () => clearTimeout(timerRef.current);
   }, [otpTimer]);
 
+  // Email validation state
+  const emailValidation = validateEmail(formData.email);
+  const isEmailValid = emailValidation.isValid;
+
+  const QUICK_EMAIL_DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com'];
+
+  // Dynamic filter: when entering @g -> gmail only, @y -> yahoo only, @ou -> outlook only
+  const getMatchingDomains = (email) => {
+    if (!email || !email.includes('@')) return [];
+    const atIndex = email.lastIndexOf('@');
+    const domainQuery = email.slice(atIndex).toLowerCase();
+    return QUICK_EMAIL_DOMAINS.filter((d) => d.startsWith(domainQuery) && d !== domainQuery);
+  };
+
+  const matchingDomains = getMatchingDomains(formData.email);
+
+  const handleDomainSelect = (domain) => {
+    const current = formData.email.trim();
+    let newEmail = '';
+    if (!current) {
+      newEmail = domain;
+    } else if (current.includes('@')) {
+      const localPart = current.slice(0, current.lastIndexOf('@'));
+      newEmail = `${localPart}${domain}`;
+    } else {
+      newEmail = `${current}${domain}`;
+    }
+    setFormData({ ...formData, email: newEmail });
+    if (otpVerified) setOtpVerified(false);
+    if (otpSent) setOtpSent(false);
+  };
+
   // Password requirements calculation
   const p = formData.password;
   const reqLength = p.length >= 8;
@@ -58,10 +90,18 @@ export const RegistrationPage = () => {
 
   // Send Email OTP via Gmail SMTP
   const handleSendOtp = async () => {
-    if (!formData.email || !formData.email.includes('@')) {
-      setOtpStatusMsg('Please enter a valid email address first.');
+    if (!formData.email.trim()) {
+      setOtpStatusMsg('Please enter your email address first.');
       setOtpStatusType('error');
-      showToast('Please enter a valid email address');
+      showToast('Please enter your email address');
+      return;
+    }
+
+    const emailCheck = validateEmail(formData.email);
+    if (!emailCheck.isValid) {
+      setOtpStatusMsg(`⚠️ ${emailCheck.error}`);
+      setOtpStatusType('error');
+      showToast(emailCheck.error);
       return;
     }
 
@@ -135,8 +175,14 @@ export const RegistrationPage = () => {
       setErrorMessage('Please enter a username.');
       return;
     }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
+    if (!formData.email.trim()) {
+      setErrorMessage('Please enter your email address.');
+      return;
+    }
+    const emailCheck = validateEmail(formData.email);
+    if (!emailCheck.isValid) {
+      setErrorMessage(emailCheck.error);
+      showToast(emailCheck.error);
       return;
     }
     if (!otpVerified) {
@@ -307,17 +353,21 @@ export const RegistrationPage = () => {
             </div>
 
             {/* Email Address with Send OTP */}
-            <div className="sm:col-span-2 space-y-2">
+            <div className="sm:col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-ink dark:text-slate-200" htmlFor="email">
                   Email address *
                 </label>
-                {otpVerified && (
+                {otpVerified ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 shadow-sm animate-fade-in">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     ✓ Email Verified
                   </span>
-                )}
+                ) : formData.email ? (
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {emailValidation.localPart ? `${emailValidation.localPart.length}/30 username chars` : `${formData.email.length} chars`}
+                  </span>
+                ) : null}
               </div>
 
               <div className="relative flex items-stretch gap-2">
@@ -336,24 +386,32 @@ export const RegistrationPage = () => {
                     className={`w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none transition focus:ring-4 bg-white dark:bg-[#101820] dark:text-white ${
                       otpVerified
                         ? 'border-emerald-500/50 bg-emerald-500/5 text-emerald-950 dark:border-emerald-500/40 dark:bg-emerald-950/20 dark:text-emerald-200 cursor-not-allowed'
+                        : formData.email.length > 0
+                        ? isEmailValid
+                          ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20'
+                          : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
                         : 'border-stone-300 focus:border-coral focus:ring-coral/20 dark:border-slate-700'
                     }`}
                     required
                   />
-                  {otpVerified && (
+                  {otpVerified ? (
                     <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-base">
                       ✓
                     </span>
-                  )}
+                  ) : formData.email.length > 0 && isEmailValid ? (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-base">
+                      ✓
+                    </span>
+                  ) : null}
                 </div>
 
                 {!otpVerified && (
                   <button
                     type="button"
                     onClick={handleSendOtp}
-                    disabled={sendingOtp || otpTimer > 0 || !formData.email}
+                    disabled={sendingOtp || otpTimer > 0 || !formData.email || !isEmailValid}
                     className={`shrink-0 rounded-2xl px-5 py-3 text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 select-none ${
-                      sendingOtp || otpTimer > 0 || !formData.email
+                      sendingOtp || otpTimer > 0 || !formData.email || !isEmailValid
                         ? 'bg-stone-200 dark:bg-slate-800 text-stone-400 dark:text-slate-500 border border-stone-300 dark:border-slate-700 cursor-not-allowed'
                         : 'bg-gradient-to-r from-coral to-[#ff6b57] hover:from-[#e04f3b] hover:to-[#ff523d] text-white shadow-md shadow-coral/25 hover:shadow-lg hover:shadow-coral/35 active:scale-95 cursor-pointer'
                     }`}
@@ -382,6 +440,35 @@ export const RegistrationPage = () => {
                   </button>
                 )}
               </div>
+
+              {/* Dynamic Domain Suggestions when typing @, @g, @y, @ou */}
+              {matchingDomains.length > 0 && !otpVerified && (
+                <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar pt-0.5 animate-fade-in">
+                  <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 shrink-0">Suggestions:</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {matchingDomains.map((domain) => (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => handleDomainSelect(domain)}
+                        className="rounded-lg bg-coral/10 hover:bg-coral text-coral hover:text-white border border-coral/30 px-2 py-1 text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
+                      >
+                        {domain}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.email.length > 0 && !otpVerified && (
+                <p
+                  className={`text-xs font-semibold ${
+                    isEmailValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+                  }`}
+                >
+                  {isEmailValid ? '✓ Valid email address' : `⚠️ ${emailValidation.error}`}
+                </p>
+              )}
 
               {/* Status Message */}
               <div

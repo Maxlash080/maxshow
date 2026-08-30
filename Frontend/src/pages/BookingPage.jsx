@@ -53,6 +53,11 @@ export const BookingPage = () => {
   const timeFormatted = formatEventTime(event.time || '', event.day);
 
   const handleConfirmBooking = async () => {
+    if (loadingEvent) {
+      showToast('Please wait while event details are loading...');
+      return;
+    }
+
     if (!isAuthenticated) {
       const redirectTarget = `/booking?event=${encodeURIComponent(slug)}&quantity=${quantity}`;
       navigate(`/user?redirect=${encodeURIComponent(redirectTarget)}`);
@@ -77,7 +82,7 @@ export const BookingPage = () => {
       phone: user?.phone || '',
     };
 
-    // Free Ticket Flow
+    // 1. If Free Ticket (Total price == 0)
     if (isFree) {
       try {
         const res = await apiRequest('/api/payment/create-order', {
@@ -85,30 +90,34 @@ export const BookingPage = () => {
           body: JSON.stringify(bookingPayload),
         });
 
-        setConfirmedBooking({
-          booking_code: res.booking_id || 'BKG-CONFIRMED',
-          title: event.title,
-          time: event.time,
-          location: event.location || event.venue,
-          tickets: quantity,
-          total: 0,
-          booking_date: new Date().toISOString(),
-        });
-        showToast('Reservation confirmed! 🎉');
+        if (res && res.free) {
+          setConfirmedBooking({
+            booking_code: res.booking_id || 'BKG-FREE',
+            title: event.title,
+            time: event.time,
+            location: event.location || event.venue,
+            tickets: quantity,
+            total: 0,
+            booking_date: new Date().toISOString(),
+          });
+          showToast('Free reservation confirmed! 🎉');
+          return;
+        }
       } catch (err) {
-        showToast(err.message || 'Failed to complete reservation');
-      } finally {
+        showToast(err.message || 'Failed to complete free reservation');
         setProcessing(false);
+        return;
+      } finally {
+        if (isFree) setProcessing(false);
       }
-      return;
     }
 
-    // Paid Ticket via Razorpay
+    // 2. Paid Ticket: Strictly requires Razorpay checkout & signature verification
     try {
       setProcessing(true);
       const isLoaded = await loadRazorpay();
       if (!isLoaded || !window.Razorpay) {
-        showToast('Payment system could not be loaded. Please check your internet connection.');
+        showToast('Razorpay payment gateway could not be loaded. Please check your network connection.');
         setProcessing(false);
         return;
       }
@@ -117,6 +126,25 @@ export const BookingPage = () => {
         method: 'POST',
         body: JSON.stringify(bookingPayload),
       });
+
+      if (orderData.free) {
+        setConfirmedBooking({
+          booking_code: orderData.booking_id || 'BKG-FREE',
+          title: event.title,
+          time: event.time,
+          location: event.location || event.venue,
+          tickets: quantity,
+          total: 0,
+          booking_date: new Date().toISOString(),
+        });
+        showToast('Reservation confirmed! 🎉');
+        setProcessing(false);
+        return;
+      }
+
+      if (!orderData.order_id || !orderData.key_id) {
+        throw new Error('Unable to create payment order. Please try again.');
+      }
 
       const options = {
         key: orderData.key_id,
@@ -152,13 +180,13 @@ export const BookingPage = () => {
               time: event.time,
               location: event.location || event.venue,
               tickets: quantity,
-              total: totalPrice,
+              total: Number(orderData.amount) / 100 || totalPrice,
               payment_id: response.razorpay_payment_id,
               booking_date: new Date().toISOString(),
             });
             showToast('Payment verified & booking confirmed! 🎟️');
           } catch (vErr) {
-            showToast(vErr.message || 'Payment verification failed');
+            showToast(vErr.message || 'Payment verification failed on server');
           } finally {
             setProcessing(false);
           }
@@ -166,15 +194,19 @@ export const BookingPage = () => {
         modal: {
           ondismiss: () => {
             setProcessing(false);
-            showToast('Payment cancelled');
+            showToast('Payment was not completed. No booking was created.');
           },
         },
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        setProcessing(false);
+        showToast(resp.error?.description || 'Payment failed. Please try again.');
+      });
       rzp.open();
     } catch (err) {
-      showToast(err.message || 'Failed to initiate checkout');
+      showToast(err.message || 'Failed to initiate checkout with Razorpay');
       setProcessing(false);
     }
   };

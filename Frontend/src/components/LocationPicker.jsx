@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { LOCATIONS } from '../utils/constants';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useToast } from '../context/ToastContext';
 
 export const LocationPicker = ({
@@ -11,16 +10,17 @@ export const LocationPicker = ({
   const dropdownRef = useRef(null);
   const { showToast } = useToast();
 
-  // Filter out "Pune" from both available locations and fallback LOCATIONS
   const isInvalidLocation = (loc) => {
     if (!loc || typeof loc !== 'string') return true;
     const clean = loc.trim().toLowerCase();
     return clean === 'pune' || clean === 'pune, pune' || clean === 'pune city' || clean === '';
   };
 
-  const filteredAvailableLocations = availableLocations.filter((loc) => !isInvalidLocation(loc));
-  const filteredLocations = LOCATIONS.filter((loc) => !isInvalidLocation(loc));
-  const locationsList = filteredAvailableLocations.length > 0 ? filteredAvailableLocations : filteredLocations;
+  // ONLY show locations that actually contain active events
+  const locationsList = useMemo(() => {
+    const list = (availableLocations || []).filter((loc) => !isInvalidLocation(loc));
+    return Array.from(new Set(list.map((l) => l.trim()))).sort((a, b) => a.localeCompare(b));
+  }, [availableLocations]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -33,7 +33,6 @@ export const LocationPicker = ({
   }, []);
 
   const handleSelect = (loc) => {
-    // Prevent selecting "Pune" even if it somehow gets through
     if (isInvalidLocation(loc)) {
       showToast('Please select a specific area instead of Pune');
       return;
@@ -42,6 +41,10 @@ export const LocationPicker = ({
     setIsOpen(false);
     showToast(`Showing events near ${loc}`);
   };
+
+  if (locationsList.length === 0) {
+    return null;
+  }
 
   return (
     <div className="relative hidden sm:block" ref={dropdownRef}>
@@ -55,7 +58,7 @@ export const LocationPicker = ({
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-5.5 7-12A7 7 0 1 0 5 9c0 6.5 7 12 7 12Z" />
           <circle cx="12" cy="9" r="2.5" />
         </svg>
-        <span className="truncate max-w-[110px]">{currentLocation}</span>
+        <span className="truncate max-w-[140px] sm:max-w-[180px]">{currentLocation}</span>
         <svg className={`h-3 w-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-coral' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
@@ -65,7 +68,7 @@ export const LocationPicker = ({
         <div
           onWheel={(e) => e.stopPropagation()}
           data-dropdown-popover
-          className="absolute right-0 mt-2 z-50 w-56 rounded-2xl border border-stone-200/80 bg-white/95 p-1.5 shadow-xl dark:border-white/10 dark:bg-[#1c2733]/95 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 max-h-60 overflow-y-auto overscroll-contain"
+          className="absolute right-0 mt-2 z-50 min-w-[210px] sm:min-w-[250px] max-w-[320px] rounded-2xl border border-stone-200/80 bg-white/95 p-1.5 shadow-xl dark:border-white/10 dark:bg-[#1c2733]/95 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 max-h-60 overflow-y-auto overscroll-contain no-scrollbar"
         >
           {locationsList.map((loc) => (
             <button
@@ -78,9 +81,9 @@ export const LocationPicker = ({
               }`}
               type="button"
             >
-              <span>{loc}</span>
+              <span className="font-semibold break-words text-left mr-1">{loc}</span>
               {currentLocation === loc && (
-                <span className="text-xs">✓</span>
+                <span className="text-xs ml-2 shrink-0">✓</span>
               )}
             </button>
           ))}
